@@ -1,0 +1,37 @@
+{
+  "agent": {
+    "name": "GmailAgent",
+    "model": "claude-3-5-haiku-20241022",
+    "max_turns": 30,
+    "system_prompt_file": "clarvis_agents/gmail_agent/prompts.py"
+  },
+  "permissions": {
+    "read_only": true,
+    "allowed_operations": [
+      "search",
+      "read",
+      "list"
+    ],
+    "blocked_operations": [
+      "send",
+      "delete",
+      "modify",
+      "trash"
+    ]
+  },
+  "rate_limits": {
+    "max_emails_per_search": 50,
+    "max_searches_per_minute": 10
+  },
+  "mcp_server": {
+    "name": "gmail",
+    "provider": "@gongrzhe/server-gmail-autoauth-mcp",
+    "credentials_path": "~/.gmail-mcp/credentials.json",
+    "token_path": "~/.gmail-mcp/token.json"
+  },
+  "logging": {
+    "level": "INFO",
+    "audit_log": true,
+    "log_directory": "logs/gmail_agent"
+  }
+}
