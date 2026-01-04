@@ -1,16 +1,17 @@
 # AI Home Assistant - Technical Architecture
 
-**Last Updated:** December 31, 2024
+**Last Updated:** January 4, 2026
 
 ---
 
 ## Table of Contents
 1. [Infrastructure Overview](#infrastructure-overview)
 2. [Local Infrastructure](#local-infrastructure)
-3. [Network Architecture](#network-architecture)
-4. [Cloud Infrastructure](#cloud-infrastructure-future)
-5. [Agent Architecture](#agent-architecture-future)
-6. [Security Considerations](#security-considerations)
+3. [Clarvis API Server](#clarvis-api-server)
+4. [Network Architecture](#network-architecture)
+5. [Cloud Infrastructure](#cloud-infrastructure-future)
+6. [Agent Architecture](#agent-architecture)
+7. [Security Considerations](#security-considerations)
 
 ---
 
@@ -28,15 +29,19 @@
 │  │  │   - Supervisor                     │  │                   │
 │  │  │   - Add-ons (SSH, Samba, etc.)     │  │                   │
 │  │  │   - Custom Integrations            │  │                   │
+│  │  └──────────────┬─────────────────────┘  │                   │
+│  │                 │ HTTP :8000             │                   │
+│  │                 ▼                        │                   │
+│  │  ┌────────────────────────────────────┐  │                   │
+│  │  │   Windows Host (10.0.0.23)         │  │                   │
+│  │  │   - Clarvis API Server (FastAPI)   │  │                   │
+│  │  │   - Gmail Agent + MCP Server       │  │                   │
+│  │  │   - Development environment        │  │                   │
 │  │  └────────────────────────────────────┘  │                   │
-│  │                                          │                   │
-│  │  Windows Host:                           │                   │
-│  │  - Development environment               │                   │
-│  │  - MCP servers                           │                   │
-│  │  - Local agent execution                 │                   │
 │  └──────────────────────────────────────────┘                   │
 │                          │                                       │
-│                    Bridged Network                               │
+│              Home Assistant Bridge                               │
+│             (Hyper-V Virtual Switch)                            │
 │                          │                                       │
 │  ┌──────────────────────────────────────────┐                   │
 │  │     Home Assistant Voice PE              │                   │
@@ -134,6 +139,97 @@ Wake Word → STT (Whisper) → Intent → Agent → Response → TTS (Piper) �
 
 ---
 
+## Clarvis API Server
+
+The Clarvis API Server exposes AI agents via HTTP REST endpoints, enabling Home Assistant to query agents for natural language processing.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Clarvis API Server                            │
+│                    (FastAPI + Uvicorn)                          │
+│                                                                  │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
+│  │   Routes    │    │   Agents    │    │    MCP Servers      │  │
+│  │             │    │             │    │                     │  │
+│  │ /health     │───▶│ GmailAgent  │───▶│ @gongrzhe/server-   │  │
+│  │ /api/v1/    │    │             │    │ gmail-autoauth-mcp  │  │
+│  │   gmail/    │    │             │    │                     │  │
+│  └─────────────┘    └─────────────┘    └─────────────────────┘  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Directory Structure
+
+```
+clarvis_agents/
+├── api/
+│   ├── __init__.py
+│   ├── server.py           # FastAPI app with CORS, middleware
+│   ├── config.py           # APIConfig dataclass
+│   └── routes/
+│       ├── __init__.py
+│       ├── gmail.py        # POST /api/v1/gmail/query
+│       └── health.py       # GET /health
+├── gmail_agent/
+│   ├── __init__.py
+│   ├── config.py           # GmailAgentConfig, RateLimiter
+│   ├── prompts.py          # System prompts
+│   └── tools.py            # Helper tools
+configs/
+├── api_config.json         # API server configuration
+├── gmail_agent_config.json # Gmail agent settings
+└── mcp_servers.json        # MCP server registry
+scripts/
+└── run_api_server.py       # Entry point for API server
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Root endpoint with API info |
+| `/health` | GET | Health check, returns server status and available agents |
+| `/docs` | GET | Swagger UI documentation |
+| `/api/v1/gmail/query` | POST | Query the Gmail agent with natural language |
+
+### Configuration
+
+**File:** `configs/api_config.json`
+```json
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "cors_origins": ["*"],
+    "debug": false
+  },
+  "agents": {
+    "gmail": {
+      "enabled": true,
+      "timeout_seconds": 120
+    }
+  }
+}
+```
+
+### Starting the Server
+
+```bash
+# Standard startup
+python scripts/run_api_server.py
+
+# Custom port
+python scripts/run_api_server.py --port 8080
+
+# Development mode with auto-reload
+python scripts/run_api_server.py --reload
+```
+
+---
+
 ## Network Architecture
 
 ### Network Topology
@@ -145,42 +241,67 @@ Internet
 ┌─────────────────────────────────────────┐
 │            Home Router                   │
 │         (DHCP Server)                    │
-│         Subnet: 192.168.x.0/24          │
+│         Subnet: 10.0.0.0/24             │
 └─────────────────────────────────────────┘
          │              │              │
          ▼              ▼              ▼
     ┌─────────┐   ┌──────────┐   ┌──────────┐
     │ Windows │   │   HAOS   │   │ Voice PE │
     │  Host   │   │    VM    │   │          │
-    │ .100    │   │  .101    │   │  .102    │
+    │10.0.0.23│   │  (DHCP)  │   │  (DHCP)  │
+    │ :8000   │   │  :8123   │   │          │
     └─────────┘   └──────────┘   └──────────┘
+         ▲              │
+         │   HTTP API   │
+         └──────────────┘
 ```
 
 ### Hyper-V Virtual Switch Configuration
 
 **Switch Name:** `Home Assistant Bridge`
 **Type:** External
-**Binding:** Physical network adapter (Ethernet preferred)
+**Binding:** Physical network adapter (WiFi - Ethernet migration planned, see Issue #8)
 **Sharing:** Management OS shares adapter
+**Network Profile:** Public (requires firewall rule to include Public profile)
 
 This configuration gives the VM its own IP address on the home network, allowing:
 - Voice PE to communicate directly with Home Assistant
+- Home Assistant to communicate with Clarvis API on Windows host
 - mDNS discovery (`homeassistant.local`)
 - Access from any device on the network
 
 ### Ports & Protocols
 
-| Service | Port | Protocol | Direction |
-|---------|------|----------|-----------|
-| Home Assistant Web UI | 8123 | HTTP/HTTPS | Inbound |
-| SSH (if enabled) | 22 | TCP | Inbound |
-| Samba | 445 | TCP | Inbound |
-| mDNS | 5353 | UDP | Both |
-| Wyoming (Voice) | 10400 | TCP | Internal |
+| Service | Port | Protocol | Direction | Notes |
+|---------|------|----------|-----------|-------|
+| Clarvis API Server | 8000 | HTTP | Inbound | Windows host, firewall rule required |
+| Home Assistant Web UI | 8123 | HTTP/HTTPS | Inbound | HAOS VM |
+| SSH (if enabled) | 22 | TCP | Inbound | HAOS VM |
+| Samba | 445 | TCP | Inbound | HAOS VM |
+| mDNS | 5353 | UDP | Both | - |
+| Wyoming (Voice) | 10400 | TCP | Internal | - |
+
+### Windows Firewall Configuration
+
+A firewall rule is required for the Clarvis API Server:
+
+**Rule Name:** `Clarvis API Server`
+**Direction:** Inbound
+**Protocol:** TCP
+**Port:** 8000
+**Profiles:** Private, Public
+
+```powershell
+# Create rule (run as Administrator)
+New-NetFirewallRule -DisplayName 'Clarvis API Server' `
+    -Direction Inbound -Protocol TCP -LocalPort 8000 `
+    -Action Allow -Profile Private,Public
+```
 
 ### DNS/Discovery
 
 - **mDNS:** Home Assistant advertises as `homeassistant.local`
+- **Windows Host:** Access via IP `10.0.0.23` (mDNS not available)
 - **Fallback:** Use direct IP if mDNS doesn't resolve
 - **Voice PE Discovery:** Auto-discovered via Zeroconf/mDNS
 
@@ -240,45 +361,85 @@ This configuration gives the VM its own IP address on the home network, allowing
 
 ---
 
-## Agent Architecture (Future)
+## Agent Architecture
 
-### Agent Communication Flow
+### Current Implementation
+
+The Gmail Agent is fully implemented and accessible via the Clarvis API Server.
 
 ```
 ┌──────────────┐     ┌───────────────────┐     ┌─────────────────┐
-│  Voice PE    │────▶│  Home Assistant   │────▶│  Agent Router   │
-│              │     │  (Intent Parse)   │     │  (Local)        │
+│  Voice PE    │────▶│  Home Assistant   │────▶│  Clarvis API    │
+│              │     │  (Intent Parse)   │     │  (FastAPI)      │
 └──────────────┘     └───────────────────┘     └─────────────────┘
                                                        │
-                     ┌─────────────────────────────────┼─────────┐
-                     │                                 │         │
-                     ▼                                 ▼         ▼
-              ┌─────────────┐                  ┌───────────┐ ┌───────┐
-              │ Email Agent │                  │ Calendar  │ │Weather│
-              │  (Local)    │                  │  (AWS)    │ │ (AWS) │
-              └─────────────┘                  └───────────┘ └───────┘
+                                                       ▼
+                                               ┌─────────────┐
+                                               │ GmailAgent  │
+                                               │  (Local)    │
+                                               │     │       │
+                                               │     ▼       │
+                                               │  MCP Server │
+                                               │  (Gmail)    │
+                                               └─────────────┘
 ```
 
-### Base Agent Interface (Planned)
+### Gmail Agent
+
+**Location:** `clarvis_agents/gmail_agent/`
+
+**Features:**
+- Natural language email queries via Claude Agent SDK
+- MCP (Model Context Protocol) integration for Gmail access
+- Read-only mode for safety (blocks send/delete/modify operations)
+- Rate limiting via sliding window algorithm
+- OAuth authentication via `~/.gmail-mcp/` credentials
+
+**Usage:**
+```python
+from clarvis_agents.gmail_agent import GmailAgent
+
+agent = GmailAgent(read_only=True)
+response = agent.check_emails("How many unread emails do I have?")
+```
+
+**API Access:**
+```bash
+curl -X POST http://10.0.0.23:8000/api/v1/gmail/query \
+     -H "Content-Type: application/json" \
+     -d '{"query": "check my unread emails"}'
+```
+
+### Future Agents (Planned)
+
+| Agent | Location | Status | Reason |
+|-------|----------|--------|--------|
+| Gmail Agent | Local (UN100P) | ✅ Implemented | Privacy - email content stays local |
+| Calendar Agent | AWS Lambda | Planned | Low sensitivity, benefits from cloud |
+| Weather Agent | AWS Lambda | Planned | Public data, stateless |
+| Events Agent | AWS Lambda | Planned | Public data, stateless |
+| Router/Orchestrator | Local (UN100P) | Planned | Low latency, controls routing |
+
+### MCP Server Integration
+
+Agents use MCP (Model Context Protocol) servers for external service integration:
 
 ```python
-from abc import ABC, abstractmethod
-from anthropic import Anthropic
-
-class BaseAgent(ABC):
-    def __init__(self, client: Anthropic):
-        self.client = client
-
-    @abstractmethod
-    async def process_query(self, user_input: str, context: dict) -> str:
-        """Process a natural language query and return response."""
-        pass
-
-    @abstractmethod
-    def get_capabilities(self) -> list[str]:
-        """Return list of capabilities for routing."""
-        pass
+# Gmail MCP Server configuration (from agent.py)
+options = ClaudeAgentOptions(
+    mcp_servers={
+        "gmail": {
+            "type": "stdio",
+            "command": "npx",
+            "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
+            "env": {...}
+        }
+    }
+)
 ```
+
+**Available MCP Servers:**
+- `@gongrzhe/server-gmail-autoauth-mcp` - Gmail access with auto-auth
 
 ---
 
@@ -286,22 +447,25 @@ class BaseAgent(ABC):
 
 ### Local Security
 
-- [ ] Windows Firewall configured for Hyper-V
+- [x] Windows Firewall configured for Clarvis API (port 8000, Private+Public profiles)
 - [ ] Strong passwords for HA admin account
 - [ ] SSH key-based authentication (no password)
 - [ ] Regular Windows and HAOS updates
 
 ### Network Security
 
-- [ ] Home Assistant behind home router NAT
+- [x] Home Assistant behind home router NAT
+- [x] Clarvis API only accessible on local network (no port forwarding)
 - [ ] No port forwarding to HA (use Nabu Casa or VPN for remote access)
 - [ ] mDNS limited to local network
 
 ### API Security
 
-- [ ] API keys stored in environment variables or Secrets Manager
+- [x] Gmail Agent runs in read-only mode (send/delete/modify blocked)
+- [x] API keys stored in environment variables (`.env` file)
 - [ ] Rotate API keys periodically
 - [ ] Use least-privilege access for all integrations
+- [ ] Rate limiting implemented in Gmail Agent
 
 ### Privacy Matrix
 
@@ -318,19 +482,19 @@ class BaseAgent(ABC):
 
 ### Phase 0: VM Setup
 
-- [ ] Verify Windows 11 Pro edition
-- [ ] Enable Hyper-V via PowerShell
-- [ ] Restart PC
-- [ ] Create External Virtual Switch "Home Assistant Bridge"
-- [ ] Download HAOS VHDX image
-- [ ] Create Gen 2 VM (4GB RAM, 2 CPUs)
-- [ ] Disable Secure Boot in VM settings
-- [ ] Start VM and wait for first boot
-- [ ] Access `http://homeassistant.local:8123`
-- [ ] Complete onboarding wizard
+- [x] Verify Windows 11 Pro edition
+- [x] Enable Hyper-V via PowerShell
+- [x] Restart PC
+- [x] Create External Virtual Switch "Home Assistant Bridge"
+- [x] Download HAOS VHDX image
+- [x] Create Gen 2 VM (4GB RAM, 2 CPUs)
+- [x] Disable Secure Boot in VM settings
+- [x] Start VM and wait for first boot
+- [x] Access `http://homeassistant.local:8123`
+- [x] Complete onboarding wizard
 - [ ] Install Terminal & SSH add-on
 - [ ] Install Samba add-on
-- [ ] Configure VM auto-start
+- [x] Configure VM auto-start
 
 ### Phase 0: Voice PE Setup
 
@@ -340,12 +504,33 @@ class BaseAgent(ABC):
 - [ ] Configure Assist pipeline
 - [ ] Test wake word and basic commands
 
-### Phase 1: Local Development
+### Phase 1: API Server (✅ Complete - Issue #4)
 
-- [ ] Set up Python environment on Windows host
-- [ ] Install Anthropic SDK
-- [ ] Build first test agent
-- [ ] Create HA custom integration
+- [x] Set up Python environment on Windows host (uv package manager)
+- [x] Install Claude Agent SDK and dependencies
+- [x] Build Gmail Agent with MCP integration
+- [x] Create FastAPI server (`clarvis_agents/api/`)
+- [x] Implement health endpoint (`GET /health`)
+- [x] Implement Gmail query endpoint (`POST /api/v1/gmail/query`)
+- [x] Add configuration files (`configs/api_config.json`)
+- [x] Create server entry point (`scripts/run_api_server.py`)
+- [x] Add comprehensive tests (`tests/test_api_server.py`)
+
+### Phase 2: Network Configuration (✅ Complete - Issue #5)
+
+- [x] Create Windows Firewall rule (port 8000, Private+Public profiles)
+- [x] Identify Windows host IP on Home Assistant Bridge (10.0.0.23)
+- [x] Test API connectivity from HA VM
+- [x] Create network setup documentation (`docs/homeassistant_setup.md`)
+- [x] Add network configuration tests (`tests/test_network_config.py`)
+- [ ] Migrate from WiFi to Ethernet adapter (Issue #8)
+
+### Phase 3: Home Assistant Integration (Planned - Issue #3)
+
+- [ ] Create HA custom component (`custom_components/clarvis/`)
+- [ ] Implement conversation agent interface
+- [ ] Add intent detection for email queries
+- [ ] Configure Assist pipeline to use Clarvis agent
 - [ ] Test voice → agent → voice loop
 
 ---
@@ -355,3 +540,4 @@ class BaseAgent(ABC):
 | Date | Version | Changes |
 |------|---------|---------|
 | 2024-12-31 | 1.0 | Initial architecture document |
+| 2026-01-04 | 2.0 | Added Clarvis API Server section; Updated network architecture with actual IPs and firewall config; Updated agent architecture with Gmail Agent implementation; Updated setup checklist with Phase 1 & 2 completion |
