@@ -2,11 +2,30 @@
 
 These tests verify the network configuration for Home Assistant ↔ Clarvis connectivity.
 Each task has corresponding tests that must pass before proceeding to the next task.
+
+Note: Windows-specific tests (firewall, network adapter) are skipped on non-Windows platforms.
 """
 
+import ipaddress
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+import requests
+
+# Platform detection for Windows-specific tests
+IS_WINDOWS = sys.platform == "win32"
+WINDOWS_ONLY = pytest.mark.skipif(not IS_WINDOWS, reason="Windows-only test")
+
+
+def validate_ipv4(ip_str: str) -> bool:
+    """Validate that a string is a valid IPv4 address."""
+    try:
+        ipaddress.IPv4Address(ip_str)
+        return True
+    except ValueError:
+        return False
 
 
 # =============================================================================
@@ -44,10 +63,9 @@ def test_project_plan_doc_moved():
 # =============================================================================
 
 
+@WINDOWS_ONLY
 def test_firewall_rule_exists():
     """Verify Clarvis API Server firewall rule exists, is enabled, and allows Private+Public profiles."""
-    import subprocess
-
     # Check rule exists and is enabled
     result = subprocess.run(
         [
@@ -81,28 +99,27 @@ def test_firewall_rule_exists():
 # =============================================================================
 
 
+@WINDOWS_ONLY
 def test_host_ip_identified():
     """Verify we can identify a valid host IP on Home Assistant Bridge virtual switch."""
-    import subprocess
-
     result = subprocess.run(
         [
             "powershell",
             "-Command",
-            "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -like '*Home Assistant*' } | Select-Object -ExpandProperty IPAddress",
+            "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -like '*Home Assistant*' } | Select-Object -First 1 -ExpandProperty IPAddress",
         ],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0, f"Failed to get IP address: {result.stderr}"
 
-    # Should have at least one IP address
-    ip = result.stdout.strip()
-    assert ip, "No IP address found on Home Assistant Bridge"
+    # Should have at least one IP address (handle multiple IPs by taking first line)
+    ips = result.stdout.strip().split("\n")
+    assert ips and ips[0], "No IP address found on Home Assistant Bridge"
+    ip = ips[0].strip()
 
-    # Basic IP format validation
-    parts = ip.split(".")
-    assert len(parts) == 4, f"Invalid IP format: {ip}"
+    # Proper IP validation using ipaddress module
+    assert validate_ipv4(ip), f"Invalid IPv4 address: {ip}"
 
 
 # =============================================================================
@@ -110,10 +127,9 @@ def test_host_ip_identified():
 # =============================================================================
 
 
+@pytest.mark.integration
 def test_api_server_health_localhost():
     """Verify API server health endpoint responds on localhost."""
-    import requests
-
     try:
         response = requests.get("http://localhost:8000/health", timeout=5)
         assert response.status_code == 200, f"Health endpoint returned {response.status_code}"
@@ -129,12 +145,10 @@ def test_api_server_health_localhost():
 # =============================================================================
 
 
+@WINDOWS_ONLY
+@pytest.mark.integration
 def test_api_server_health_via_host_ip():
     """Verify API server responds via the host IP (not just localhost)."""
-    import subprocess
-
-    import requests
-
     # Get host IP from Home Assistant Bridge virtual switch
     result = subprocess.run(
         [
@@ -145,8 +159,9 @@ def test_api_server_health_via_host_ip():
         capture_output=True,
         text=True,
     )
-    host_ip = result.stdout.strip()
+    host_ip = result.stdout.strip().split("\n")[0].strip() if result.stdout.strip() else ""
     assert host_ip, "Could not determine host IP"
+    assert validate_ipv4(host_ip), f"Invalid host IP: {host_ip}"
 
     # Test health endpoint via host IP
     try:
@@ -186,14 +201,12 @@ def test_homeassistant_setup_doc_content():
 
 def test_ethernet_migration_issue_created():
     """Verify GitHub issue for Ethernet migration was created."""
-    import subprocess
-
     result = subprocess.run(
-        ["gh", "issue", "list", "--repo", "jhcahoon/clarvis", "--search", "Ethernet adapter"],
+        ["gh", "issue", "view", "8", "--repo", "jhcahoon/clarvis", "--json", "title,state"],
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"Failed to list GitHub issues: {result.stderr}"
+    assert result.returncode == 0, f"Failed to view GitHub issue #8: {result.stderr}"
     assert "Ethernet" in result.stdout or "ethernet" in result.stdout, (
-        "Ethernet migration issue not found"
+        "Issue #8 is not the Ethernet migration issue"
     )

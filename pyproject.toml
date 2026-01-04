@@ -66,3 +66,9 @@ packages = ["clarvis_agents"]
 dev = [
     "ipykernel>=6.29.5",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests (may require running services)",
+    "windows: marks tests as Windows-only",
+]
