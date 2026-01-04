@@ -73,7 +73,6 @@ class GmailAgent:
             model=self.config.model,
             max_turns=self.config.max_turns,
             # Skip permission checks for MCP tools - required for SDK MCP tool usage
-            # TODO: Configure proper permissions instead of skipping
             extra_args={"dangerously-skip-permissions": None},
         )
 

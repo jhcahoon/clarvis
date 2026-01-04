@@ -12,6 +12,20 @@ import os
 from pathlib import Path
 
 
+def get_mcp_config_path() -> str:
+    """Get the MCP config path, preferring local over example."""
+    config_dir = Path(__file__).parent.parent.parent / "configs"
+    local_config = config_dir / "mcp_servers.local.json"
+    example_config = config_dir / "mcp_servers.json.example"
+
+    if local_config.exists():
+        return str(local_config)
+    elif example_config.exists():
+        return str(example_config)
+    else:
+        return str(config_dir / "mcp_servers.json")
+
+
 def call_claude_cli(prompt: str, mcp_config_path: str = None, output_format: str = "text") -> dict:
     """
     Call Claude CLI directly with MCP server configuration.
@@ -83,7 +97,7 @@ def demo_2_with_gmail_mcp():
     print("=" * 80)
 
     # Use existing config
-    config_path = "/Users/james.cahoon/projects/clarvis/configs/mcp_servers.json"
+    config_path = get_mcp_config_path()
 
     result = call_claude_cli(
         "List the first 5 Gmail tools you have. Just list their names, one per line.",
@@ -100,7 +114,7 @@ def demo_3_json_output():
     print("DEMO 3: JSON output format for programmatic parsing")
     print("=" * 80)
 
-    config_path = "/Users/james.cahoon/projects/clarvis/configs/mcp_servers.json"
+    config_path = get_mcp_config_path()
 
     result = call_claude_cli(
         "How many gmail tools do you have? Answer with just the number.",
@@ -225,7 +239,7 @@ def demo_6_real_gmail_query():
     print("DEMO 6: Real Gmail query (will prompt for auth if needed)")
     print("=" * 80)
 
-    config_path = "/Users/james.cahoon/projects/clarvis/configs/mcp_servers.json"
+    config_path = get_mcp_config_path()
 
     print("Asking Claude to search Gmail...")
     print("(This may prompt for OAuth authorization)")

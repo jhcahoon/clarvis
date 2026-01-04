@@ -14,6 +14,21 @@ import os
 from pathlib import Path
 import tempfile
 
+
+def get_mcp_config_path() -> str:
+    """Get the MCP config path, preferring local over example."""
+    config_dir = Path(__file__).parent.parent.parent / "configs"
+    local_config = config_dir / "mcp_servers.local.json"
+    example_config = config_dir / "mcp_servers.json.example"
+
+    if local_config.exists():
+        return str(local_config)
+    elif example_config.exists():
+        return str(example_config)
+    else:
+        # Fallback for backwards compatibility
+        return str(config_dir / "mcp_servers.json")
+
 def test_1_find_claude_executable():
     """Test 1: Verify claude CLI is available."""
     print("=" * 80)
@@ -53,8 +68,8 @@ def test_3_launch_cli_with_mcp_config():
     print("TEST 3: Launch Claude CLI with MCP Config")
     print("=" * 80)
 
-    # Use existing MCP config
-    mcp_config_path = "/Users/james.cahoon/projects/clarvis/configs/mcp_servers.json"
+    # Use existing MCP config (local or example)
+    mcp_config_path = get_mcp_config_path()
 
     print(f"Using MCP config: {mcp_config_path}")
 
@@ -110,8 +125,8 @@ def test_4_env_vars_with_mcp_config():
                 "command": "npx",
                 "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
                 "env": {
-                    "GMAIL_OAUTH_PATH": "/Users/james.cahoon/.gmail-mcp/gcp-oauth.keys.json",
-                    "GMAIL_CREDENTIALS_PATH": "/Users/james.cahoon/.gmail-mcp/credentials.json",
+                    "GMAIL_OAUTH_PATH": str(Path.home() / ".gmail-mcp" / "gcp-oauth.keys.json"),
+                    "GMAIL_CREDENTIALS_PATH": str(Path.home() / ".gmail-mcp" / "credentials.json"),
                     "DEBUG_MCP": "1",
                     "TEST_VAR": "test_value_from_config"
                 }
@@ -181,8 +196,8 @@ def test_5_compare_with_inline_mcp_config():
                 "command": "npx",
                 "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
                 "env": {
-                    "GMAIL_OAUTH_PATH": "/Users/james.cahoon/.gmail-mcp/gcp-oauth.keys.json",
-                    "GMAIL_CREDENTIALS_PATH": "/Users/james.cahoon/.gmail-mcp/credentials.json"
+                    "GMAIL_OAUTH_PATH": str(Path.home() / ".gmail-mcp" / "gcp-oauth.keys.json"),
+                    "GMAIL_CREDENTIALS_PATH": str(Path.home() / ".gmail-mcp" / "credentials.json")
                 }
             }
         }
@@ -231,12 +246,12 @@ def test_6_subprocess_env_override():
     print("TEST 6: Test Subprocess Environment Override")
     print("=" * 80)
 
-    mcp_config_path = "/Users/james.cahoon/projects/clarvis/configs/mcp_servers.json"
+    mcp_config_path = get_mcp_config_path()
 
     # Create custom environment with additional vars
     custom_env = os.environ.copy()
-    custom_env['GMAIL_OAUTH_PATH'] = '/Users/james.cahoon/.gmail-mcp/gcp-oauth.keys.json'
-    custom_env['GMAIL_CREDENTIALS_PATH'] = '/Users/james.cahoon/.gmail-mcp/credentials.json'
+    custom_env['GMAIL_OAUTH_PATH'] = str(Path.home() / ".gmail-mcp" / "gcp-oauth.keys.json")
+    custom_env['GMAIL_CREDENTIALS_PATH'] = str(Path.home() / ".gmail-mcp" / "credentials.json")
     custom_env['DEBUG_MCP'] = '1'
     custom_env['CUSTOM_TEST_VAR'] = 'from_subprocess_env'
 

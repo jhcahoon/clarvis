@@ -19,6 +19,15 @@ uv sync
 # Run Gmail Agent (interactive mode)
 python -m clarvis_agents.gmail_agent
 
+# Run API Server (for Home Assistant integration)
+python scripts/run_api_server.py
+
+# Run API Server with custom port
+python scripts/run_api_server.py --port 8080
+
+# Run API Server with auto-reload (development)
+python scripts/run_api_server.py --reload
+
 # Run tests
 pytest tests/ -v
 
@@ -55,9 +64,29 @@ clarvis_agents/
 - Rate limiting implemented via sliding window algorithm in `RateLimiter` class
 - Read-only mode enforced by blocking specific MCP tools (send, delete, modify)
 
+### API Server
+
+The API server exposes agents via HTTP for Home Assistant integration:
+
+```
+clarvis_agents/
+└── api/
+    ├── server.py         # FastAPI app
+    ├── config.py         # APIConfig dataclass
+    └── routes/
+        ├── health.py     # GET /health
+        └── gmail.py      # POST /api/v1/gmail/query
+```
+
+**Endpoints:**
+- `GET /health` - Health check
+- `GET /docs` - Swagger UI documentation
+- `POST /api/v1/gmail/query` - Query Gmail agent
+
 ### Configuration
 
 - `configs/gmail_agent_config.json` - Agent settings, permissions, rate limits
+- `configs/api_config.json` - API server settings (host, port, CORS)
 - `configs/mcp_servers.json` - MCP server registry with command/args/env
 - `.env` - API keys (copy from `.env.example`)
 

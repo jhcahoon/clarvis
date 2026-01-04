@@ -8,6 +8,21 @@ import json
 import os
 import tempfile
 import time
+from pathlib import Path
+
+
+def get_mcp_config_path() -> str:
+    """Get the MCP config path, preferring local over example."""
+    config_dir = Path(__file__).parent.parent.parent / "configs"
+    local_config = config_dir / "mcp_servers.local.json"
+    example_config = config_dir / "mcp_servers.json.example"
+
+    if local_config.exists():
+        return str(local_config)
+    elif example_config.exists():
+        return str(example_config)
+    else:
+        return str(config_dir / "mcp_servers.json")
 
 def test_mcp_config_variants():
     """Test different ways to pass MCP config to Claude CLI."""
@@ -76,8 +91,8 @@ def test_mcp_config_variants():
                 "command": "npx",
                 "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
                 "env": {
-                    "GMAIL_OAUTH_PATH": "/Users/james.cahoon/.gmail-mcp/gcp-oauth.keys.json",
-                    "GMAIL_CREDENTIALS_PATH": "/Users/james.cahoon/.gmail-mcp/credentials.json"
+                    "GMAIL_OAUTH_PATH": str(Path.home() / ".gmail-mcp" / "gcp-oauth.keys.json"),
+                    "GMAIL_CREDENTIALS_PATH": str(Path.home() / ".gmail-mcp" / "credentials.json")
                 }
             }
         }
@@ -123,7 +138,7 @@ def test_mcp_config_variants():
     print("TEST 3: Using existing config file")
     print("=" * 80)
 
-    existing_config = "/Users/james.cahoon/projects/clarvis/configs/mcp_servers.json"
+    existing_config = get_mcp_config_path()
 
     # First check what's in it
     with open(existing_config, 'r') as f:
@@ -217,8 +232,8 @@ def test_env_var_methods():
 
     # Set env vars via subprocess env parameter
     custom_env = os.environ.copy()
-    custom_env['GMAIL_OAUTH_PATH'] = '/Users/james.cahoon/.gmail-mcp/gcp-oauth.keys.json'
-    custom_env['GMAIL_CREDENTIALS_PATH'] = '/Users/james.cahoon/.gmail-mcp/credentials.json'
+    custom_env['GMAIL_OAUTH_PATH'] = str(Path.home() / ".gmail-mcp" / "gcp-oauth.keys.json")
+    custom_env['GMAIL_CREDENTIALS_PATH'] = str(Path.home() / ".gmail-mcp" / "credentials.json")
 
     print("Env vars set via subprocess.run env parameter:")
     print(f"  GMAIL_OAUTH_PATH={custom_env['GMAIL_OAUTH_PATH']}")

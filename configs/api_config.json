@@ -1,0 +1,14 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "cors_origins": ["*"],
+    "debug": false
+  },
+  "agents": {
+    "gmail": {
+      "enabled": true,
+      "timeout_seconds": 120
+    }
+  }
+}

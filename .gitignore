@@ -43,3 +43,7 @@ docs_local/
 
 # Claude Code local settings
 .claude/
+
+# Local config files (platform-specific)
+configs/mcp_servers.local.json
+configs/*.local.json
