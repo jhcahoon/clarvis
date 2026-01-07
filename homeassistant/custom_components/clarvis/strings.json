@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Clarvis API",
+        "description": "Enter the Clarvis API server details. The server should be running on your Windows host.",
+        "data": {
+          "api_host": "API Host",
+          "api_port": "API Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to Clarvis API. Verify the server is running and firewall allows connections."
+    },
+    "abort": {
+      "already_configured": "Clarvis is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Clarvis Options",
+        "description": "Update the Clarvis API server settings.",
+        "data": {
+          "api_host": "API Host",
+          "api_port": "API Port"
+        }
+      }
+    }
+  }
+}

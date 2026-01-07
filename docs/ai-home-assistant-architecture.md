@@ -104,7 +104,14 @@
 
 ### Home Assistant OS (HAOS)
 
-**Version:** Latest stable (auto-updates enabled)
+**Current Versions (as of January 2026):**
+
+| Component | Version |
+|-----------|---------|
+| Core | 2025.12.5 |
+| Supervisor | 2025.12.3 |
+| Operating System | 16.3 |
+| Frontend | 20251203.3 |
 
 **Core Components:**
 - Home Assistant Core - main automation platform
@@ -112,14 +119,13 @@
 - Operating System - minimal Linux base
 
 **Installed Add-ons:**
-- [ ] Terminal & SSH - CLI access
-- [ ] Samba share - Windows file access at `\\homeassistant\config`
+- [x] Terminal & SSH - CLI access
+- [x] Samba share - Windows file access at `\\homeassistant.local\config`
 - [ ] File Editor - in-browser config editing
 - [ ] Studio Code Server - VS Code in browser (optional)
 
-**Custom Integrations (Planned):**
-- Claude conversation agent
-- Custom intent handlers for agent routing
+**Custom Integrations:**
+- Clarvis conversation agent (`custom_components/clarvis/`)
 
 ### Voice Hardware: Home Assistant Voice PE
 
@@ -525,11 +531,14 @@ options = ClaudeAgentOptions(
 - [x] Add network configuration tests (`tests/test_network_config.py`)
 - [ ] Migrate from WiFi to Ethernet adapter (Issue #8)
 
-### Phase 3: Home Assistant Integration (Planned - Issue #3)
+### Phase 3: Home Assistant Integration (In Progress - Issue #6)
 
-- [ ] Create HA custom component (`custom_components/clarvis/`)
-- [ ] Implement conversation agent interface
-- [ ] Add intent detection for email queries
+- [x] Create HA custom component (`custom_components/clarvis/`)
+- [x] Implement conversation agent interface (`ClarvisConversationEntity`)
+- [x] Add intent detection for email queries (keyword matching)
+- [x] Implement config flow UI for API host/port configuration
+- [x] Add comprehensive tests (`tests/test_ha_component.py`)
+- [ ] Deploy component to Home Assistant
 - [ ] Configure Assist pipeline to use Clarvis agent
 - [ ] Test voice → agent → voice loop
 
@@ -541,3 +550,4 @@ options = ClaudeAgentOptions(
 |------|---------|---------|
 | 2024-12-31 | 1.0 | Initial architecture document |
 | 2026-01-04 | 2.0 | Added Clarvis API Server section; Updated network architecture with actual IPs and firewall config; Updated agent architecture with Gmail Agent implementation; Updated setup checklist with Phase 1 & 2 completion |
+| 2026-01-06 | 2.1 | Added HAOS version info (Core 2025.12.5, Supervisor 2025.12.3, OS 16.3); Updated Phase 3 progress with custom component implementation; Updated installed add-ons status |
