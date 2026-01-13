@@ -1,0 +1,8 @@
+{
+  "model": "claude-sonnet-4-20250514",
+  "router_model": "claude-3-5-haiku-20241022",
+  "session_timeout_minutes": 30,
+  "code_routing_threshold": 0.7,
+  "llm_routing_enabled": true,
+  "follow_up_detection": true
+}
