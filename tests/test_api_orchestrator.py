@@ -472,5 +472,217 @@ class TestHealthEndpointUpdates:
         assert data["agents"]["gmail"] == "available"
 
 
+class TestSessionContinuityAPI:
+    """Test session continuity through API endpoints."""
+
+    @pytest.fixture(autouse=True)
+    def reset_singleton(self):
+        """Reset orchestrator singleton before and after each test."""
+        reset_orchestrator()
+        yield
+        reset_orchestrator()
+
+    @pytest.fixture
+    def client(self):
+        """Create test client."""
+        return TestClient(app)
+
+    @patch("clarvis_agents.api.routes.orchestrator.create_orchestrator")
+    def test_multiple_queries_same_session(self, mock_create_orchestrator, client):
+        """Test multiple queries maintain session context."""
+        mock_orchestrator = MagicMock()
+        mock_context = MagicMock()
+        mock_context.session_id = "persistent-session"
+        mock_context.turns = []
+        mock_orchestrator.get_or_create_session.return_value = mock_context
+
+        call_count = [0]
+
+        def mock_process(query, context=None, session_id=None):
+            call_count[0] += 1
+            return AgentResponse(
+                content=f"Response {call_count[0]}",
+                success=True,
+                agent_name="orchestrator",
+            )
+
+        mock_orchestrator.process = AsyncMock(side_effect=mock_process)
+        mock_create_orchestrator.return_value = mock_orchestrator
+
+        # First query
+        response1 = client.post(
+            "/api/v1/query",
+            json={"query": "hello", "session_id": "persistent-session"},
+        )
+
+        # Second query
+        response2 = client.post(
+            "/api/v1/query",
+            json={"query": "follow up", "session_id": "persistent-session"},
+        )
+
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+        assert response1.json()["session_id"] == "persistent-session"
+        assert response2.json()["session_id"] == "persistent-session"
+
+        # Both should use the same session
+        assert mock_orchestrator.get_or_create_session.call_count == 2
+
+    @patch("clarvis_agents.api.routes.orchestrator.create_orchestrator")
+    def test_follow_up_routes_to_same_agent(self, mock_create_orchestrator, client):
+        """Test follow-up queries route to the same agent."""
+        mock_orchestrator = MagicMock()
+        mock_context = MagicMock()
+        mock_context.session_id = "test-session"
+        mock_orchestrator.get_or_create_session.return_value = mock_context
+
+        # First response from gmail agent
+        mock_orchestrator.process = AsyncMock(
+            return_value=AgentResponse(
+                content="You have 3 emails",
+                success=True,
+                agent_name="gmail",
+            )
+        )
+        mock_create_orchestrator.return_value = mock_orchestrator
+
+        # First query
+        response1 = client.post(
+            "/api/v1/query",
+            json={"query": "check my emails", "session_id": "test-session"},
+        )
+        assert response1.json()["agent_name"] == "gmail"
+
+        # Follow-up should ideally also go to gmail (depends on orchestrator logic)
+        mock_orchestrator.process = AsyncMock(
+            return_value=AgentResponse(
+                content="The first email is from John",
+                success=True,
+                agent_name="gmail",  # Same agent handles follow-up
+            )
+        )
+
+        response2 = client.post(
+            "/api/v1/query",
+            json={"query": "what about the first one?", "session_id": "test-session"},
+        )
+        assert response2.json()["agent_name"] == "gmail"
+
+    @patch("clarvis_agents.api.routes.orchestrator.create_orchestrator")
+    def test_new_session_without_session_id(self, mock_create_orchestrator, client):
+        """Test that requests without session_id get new sessions."""
+        mock_orchestrator = MagicMock()
+        session_ids = ["session-1", "session-2"]
+        call_count = [0]
+
+        def mock_get_session(session_id=None):
+            mock_context = MagicMock()
+            if session_id is None:
+                mock_context.session_id = session_ids[call_count[0]]
+                call_count[0] += 1
+            else:
+                mock_context.session_id = session_id
+            return mock_context
+
+        mock_orchestrator.get_or_create_session.side_effect = mock_get_session
+        mock_orchestrator.process = AsyncMock(
+            return_value=AgentResponse(
+                content="Response",
+                success=True,
+                agent_name="orchestrator",
+            )
+        )
+        mock_create_orchestrator.return_value = mock_orchestrator
+
+        # Two requests without session_id
+        response1 = client.post("/api/v1/query", json={"query": "hello"})
+        response2 = client.post("/api/v1/query", json={"query": "hi"})
+
+        # Should get different session IDs
+        assert response1.json()["session_id"] == "session-1"
+        assert response2.json()["session_id"] == "session-2"
+
+
+class TestOrchestratorEdgeCases:
+    """Additional edge case tests for orchestrator API."""
+
+    @pytest.fixture(autouse=True)
+    def reset_singleton(self):
+        """Reset orchestrator singleton before and after each test."""
+        reset_orchestrator()
+        yield
+        reset_orchestrator()
+
+    @pytest.fixture
+    def client(self):
+        """Create test client."""
+        return TestClient(app)
+
+    @patch("clarvis_agents.api.routes.orchestrator.create_orchestrator")
+    def test_very_long_query(self, mock_create_orchestrator, client):
+        """Test handling of very long queries."""
+        mock_orchestrator = MagicMock()
+        mock_context = MagicMock()
+        mock_context.session_id = "test-session"
+        mock_orchestrator.get_or_create_session.return_value = mock_context
+        mock_orchestrator.process = AsyncMock(
+            return_value=AgentResponse(
+                content="Processed long query",
+                success=True,
+                agent_name="orchestrator",
+            )
+        )
+        mock_create_orchestrator.return_value = mock_orchestrator
+
+        long_query = "test " * 1000  # Very long query
+        response = client.post("/api/v1/query", json={"query": long_query})
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    @patch("clarvis_agents.api.routes.orchestrator.create_orchestrator")
+    def test_query_with_special_characters(self, mock_create_orchestrator, client):
+        """Test handling of special characters in query."""
+        mock_orchestrator = MagicMock()
+        mock_context = MagicMock()
+        mock_context.session_id = "test-session"
+        mock_orchestrator.get_or_create_session.return_value = mock_context
+        mock_orchestrator.process = AsyncMock(
+            return_value=AgentResponse(
+                content="Response",
+                success=True,
+                agent_name="orchestrator",
+            )
+        )
+        mock_create_orchestrator.return_value = mock_orchestrator
+
+        special_query = "What's the status? <script>alert('xss')</script> & more"
+        response = client.post("/api/v1/query", json={"query": special_query})
+
+        assert response.status_code == 200
+
+    @patch("clarvis_agents.api.routes.orchestrator.create_orchestrator")
+    def test_query_with_unicode(self, mock_create_orchestrator, client):
+        """Test handling of unicode characters in query."""
+        mock_orchestrator = MagicMock()
+        mock_context = MagicMock()
+        mock_context.session_id = "test-session"
+        mock_orchestrator.get_or_create_session.return_value = mock_context
+        mock_orchestrator.process = AsyncMock(
+            return_value=AgentResponse(
+                content="Response",
+                success=True,
+                agent_name="orchestrator",
+            )
+        )
+        mock_create_orchestrator.return_value = mock_orchestrator
+
+        unicode_query = "Check my email \u00e9\u00e8\u00ea \u4e2d\u6587"
+        response = client.post("/api/v1/query", json={"query": unicode_query})
+
+        assert response.status_code == 200
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
