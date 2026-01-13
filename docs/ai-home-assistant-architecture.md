@@ -184,6 +184,10 @@ clarvis_agents/
 │   ├── base_agent.py       # BaseAgent ABC, AgentResponse, AgentCapability
 │   ├── agent_registry.py   # AgentRegistry singleton
 │   └── context.py          # ConversationContext, ConversationTurn
+├── orchestrator/           # Intent classification and routing
+│   ├── __init__.py         # Exports: IntentClassifier, ClassificationResult, OrchestratorConfig
+│   ├── classifier.py       # IntentClassifier with keyword/pattern matching
+│   └── config.py           # OrchestratorConfig dataclass
 ├── gmail_agent/
 │   ├── __init__.py
 │   ├── config.py           # GmailAgentConfig, RateLimiter
@@ -192,6 +196,7 @@ clarvis_agents/
 configs/
 ├── api_config.json         # API server configuration
 ├── gmail_agent_config.json # Gmail agent settings
+├── orchestrator_config.json # Orchestrator settings
 └── mcp_servers.json        # MCP server registry
 scripts/
 └── run_api_server.py       # Entry point for API server
@@ -556,3 +561,4 @@ options = ClaudeAgentOptions(
 | 2024-12-31 | 1.0 | Initial architecture document |
 | 2026-01-04 | 2.0 | Added Clarvis API Server section; Updated network architecture with actual IPs and firewall config; Updated agent architecture with Gmail Agent implementation; Updated setup checklist with Phase 1 & 2 completion |
 | 2026-01-06 | 2.1 | Added HAOS version info (Core 2025.12.5, Supervisor 2025.12.3, OS 16.3); Updated Phase 3 progress with custom component implementation; Updated installed add-ons status |
+| 2026-01-12 | 2.2 | Added orchestrator module with IntentClassifier for code-based routing (Issue #12); Added orchestrator_config.json |
