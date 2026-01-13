@@ -8,6 +8,9 @@
 venv/
 ENV/
 
+# Lock files (regenerated locally)
+uv.lock
+
 # Python cache
 __pycache__/
 *.py[cod]
@@ -43,6 +46,8 @@ docs_local/
 
 # Claude Code local settings
 .claude/
+CLAUDE.md
+claude_learnings.md
 
 # Local config files (platform-specific)
 configs/mcp_servers.local.json
