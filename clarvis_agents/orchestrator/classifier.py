@@ -211,8 +211,18 @@ class IntentClassifier:
         # Determine if LLM routing is needed
         needs_llm = best_score < self.threshold or is_ambiguous
 
+        # When ambiguous, don't return any single agent's matches
+        if is_ambiguous:
+            return ClassificationResult(
+                agent_name=None,
+                confidence=best_score,
+                needs_llm_routing=needs_llm,
+                matched_keywords=[],
+                matched_patterns=[],
+            )
+
         return ClassificationResult(
-            agent_name=best_agent if not is_ambiguous else None,
+            agent_name=best_agent,
             confidence=best_score,
             needs_llm_routing=needs_llm,
             matched_keywords=agent_keywords.get(best_agent, []),

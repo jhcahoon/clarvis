@@ -30,8 +30,12 @@ class OrchestratorConfig:
         if not path.exists():
             return cls()
 
-        with open(path) as f:
-            data = json.load(f)
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            # Return defaults if config file is corrupted or unreadable
+            return cls()
 
         return cls(
             model=data.get("model", "claude-sonnet-4-20250514"),

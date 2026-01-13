@@ -268,6 +268,10 @@ class TestIntentClassifier:
 
         # Should flag as needing LLM routing due to ambiguity
         assert result.needs_llm_routing is True
+        # When ambiguous, agent_name should be None and lists should be empty
+        assert result.agent_name is None
+        assert result.matched_keywords == []
+        assert result.matched_patterns == []
 
     def test_classify_returns_matched_keywords(self):
         """Test that classification returns matched keywords."""
@@ -397,6 +401,23 @@ class TestOrchestratorConfig:
             assert config.router_model == "claude-3-5-haiku-20241022"
             assert config.session_timeout_minutes == 30
             assert config.code_routing_threshold == 0.7
+        finally:
+            temp_path.unlink()
+
+    def test_from_file_corrupted_json_returns_defaults(self):
+        """Test that from_file returns defaults for corrupted JSON."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            f.write("{ invalid json content }")
+            temp_path = Path(f.name)
+
+        try:
+            config = OrchestratorConfig.from_file(temp_path)
+
+            # Should return defaults, not crash
+            assert config.model == "claude-sonnet-4-20250514"
+            assert config.router_model == "claude-3-5-haiku-20241022"
         finally:
             temp_path.unlink()
 
