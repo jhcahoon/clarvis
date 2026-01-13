@@ -1,4 +1,6 @@
-"""Tests for IntentRouter (Phase 3 - Issue #13)."""
+"""Tests for IntentRouter (Issue #18)."""
+
+import asyncio
 
 import pytest
 from unittest.mock import MagicMock, patch
@@ -753,6 +755,95 @@ class TestRouteMethod:
 
         assert result.handle_directly is True
         assert result.agent_name is None
+
+
+class TestIntentRouterEdgeCases:
+    """Additional edge case tests for IntentRouter."""
+
+    @pytest.fixture(autouse=True)
+    def reset_registry(self):
+        """Reset the registry before and after each test."""
+        AgentRegistry.reset_instance()
+        yield
+        AgentRegistry.reset_instance()
+
+    def test_parse_llm_response_malformed_confidence(self):
+        """Test _parse_llm_response with non-numeric confidence."""
+        registry = AgentRegistry()
+        registry.register(MockAgent("gmail"))
+        config = OrchestratorConfig()
+        router = IntentRouter(registry, config)
+
+        response_text = """AGENT: gmail
+CONFIDENCE: not-a-number
+REASONING: test"""
+
+        result = router._parse_llm_response(response_text)
+        # Should use default confidence
+        assert result.confidence == 0.5
+
+    def test_parse_llm_response_missing_newlines(self):
+        """Test _parse_llm_response with single-line response."""
+        registry = AgentRegistry()
+        registry.register(MockAgent("gmail"))
+        config = OrchestratorConfig()
+        router = IntentRouter(registry, config)
+
+        # Single line format - parsing should still work via regex
+        response_text = "AGENT: gmail CONFIDENCE: 0.8 REASONING: test"
+        result = router._parse_llm_response(response_text)
+
+        # May or may not parse correctly depending on implementation
+        # The key is it shouldn't crash
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_route_concurrent_requests(self):
+        """Test router handles concurrent requests correctly."""
+        registry = AgentRegistry()
+        registry.register(MockAgent("gmail", "Email agent"))
+        config = OrchestratorConfig()
+        router = IntentRouter(registry, config)
+
+        queries = [
+            "check my email",
+            "hello",
+            "what's the weather",
+        ]
+
+        tasks = [router.route(q) for q in queries]
+        results = await asyncio.gather(*tasks)
+
+        assert len(results) == 3
+        # Each result should be a valid RoutingDecision
+        for result in results:
+            assert isinstance(result, RoutingDecision)
+
+    @pytest.mark.asyncio
+    async def test_route_empty_query(self):
+        """Test routing with empty query string."""
+        registry = AgentRegistry()
+        config = OrchestratorConfig(llm_routing_enabled=False)
+        router = IntentRouter(registry, config)
+
+        result = await router.route("")
+
+        # Should handle gracefully
+        assert result is not None
+        assert result.handle_directly is True
+
+    @pytest.mark.asyncio
+    async def test_route_very_long_query(self):
+        """Test routing with very long query string."""
+        registry = AgentRegistry()
+        registry.register(MockAgent("gmail"))
+        config = OrchestratorConfig()
+        router = IntentRouter(registry, config)
+
+        long_query = "check my email " * 100
+        result = await router.route(long_query)
+
+        assert result.agent_name == "gmail"
 
 
 class TestIntegration:
