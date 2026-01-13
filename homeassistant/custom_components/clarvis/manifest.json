@@ -1,0 +1,12 @@
+{
+  "domain": "clarvis",
+  "name": "Clarvis AI Assistant",
+  "version": "1.0.0",
+  "integration_type": "service",
+  "documentation": "https://github.com/jhcahoon/clarvis",
+  "requirements": [],
+  "dependencies": ["conversation"],
+  "codeowners": ["@jhcahoon"],
+  "iot_class": "local_polling",
+  "config_flow": true
+}
