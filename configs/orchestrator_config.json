@@ -1,8 +1,37 @@
 {
-  "model": "claude-sonnet-4-20250514",
-  "router_model": "claude-3-5-haiku-20241022",
-  "session_timeout_minutes": 30,
-  "code_routing_threshold": 0.7,
-  "llm_routing_enabled": true,
-  "follow_up_detection": true
+  "orchestrator": {
+    "model": "claude-sonnet-4-20250514",
+    "router_model": "claude-3-5-haiku-20241022",
+    "session_timeout_minutes": 30,
+    "max_turns": 5
+  },
+  "routing": {
+    "code_routing_threshold": 0.7,
+    "llm_routing_enabled": true,
+    "follow_up_detection": true,
+    "default_agent": null
+  },
+  "agents": {
+    "gmail": {
+      "enabled": true,
+      "priority": 1
+    },
+    "calendar": {
+      "enabled": false,
+      "priority": 2
+    },
+    "weather": {
+      "enabled": false,
+      "priority": 3
+    },
+    "events": {
+      "enabled": false,
+      "priority": 4
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "log_routing_decisions": true,
+    "log_agent_responses": true
+  }
 }
