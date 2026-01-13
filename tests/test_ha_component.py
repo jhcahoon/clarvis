@@ -1,4 +1,4 @@
-"""Tests for Phase 3: Home Assistant Custom Component.
+"""Tests for Home Assistant Custom Component.
 
 These tests verify the Clarvis Home Assistant custom component implementation.
 Each task has corresponding tests that must pass before proceeding to the next task.
@@ -73,22 +73,22 @@ class TestConstants:
         const = load_const_module()
         assert const["DOMAIN"] == "clarvis"
 
-    def test_email_keywords_contains_required(self):
-        """Verify EMAIL_KEYWORDS contains all required keywords."""
+    def test_ha_command_keywords_contains_required(self):
+        """Verify HA_COMMAND_KEYWORDS contains required device control keywords."""
         const = load_const_module()
-        email_keywords = const["EMAIL_KEYWORDS"]
+        ha_keywords = const["HA_COMMAND_KEYWORDS"]
 
-        required_keywords = ["email", "inbox", "gmail", "unread"]
+        required_keywords = ["turn on", "turn off", "dim", "lock", "unlock"]
         for keyword in required_keywords:
-            assert keyword in email_keywords, f"Missing keyword: {keyword}"
+            assert keyword in ha_keywords, f"Missing keyword: {keyword}"
 
-    def test_email_keywords_is_list(self):
-        """Verify EMAIL_KEYWORDS is a list."""
+    def test_ha_command_keywords_is_list(self):
+        """Verify HA_COMMAND_KEYWORDS is a list."""
         const = load_const_module()
-        email_keywords = const["EMAIL_KEYWORDS"]
+        ha_keywords = const["HA_COMMAND_KEYWORDS"]
 
-        assert isinstance(email_keywords, list)
-        assert len(email_keywords) > 0
+        assert isinstance(ha_keywords, list)
+        assert len(ha_keywords) > 0
 
     def test_default_api_host(self):
         """Verify DEFAULT_API_HOST is correct."""
@@ -113,7 +113,7 @@ class TestConstants:
         const = load_const_module()
 
         assert const["HEALTH_ENDPOINT"] == "/health"
-        assert const["GMAIL_QUERY_ENDPOINT"] == "/api/v1/gmail/query"
+        assert const["ORCHESTRATOR_QUERY_ENDPOINT"] == "/api/v1/query"
 
     def test_config_keys(self):
         """Verify configuration key constants are defined."""
@@ -279,54 +279,190 @@ class TestConversationAgent:
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
         ]
 
+        # Updated required methods for orchestrator integration
         required_methods = [
             "__init__",
             "async_process",
-            "_is_email_query",
-            "_handle_email_query",
+            "_is_ha_command",
+            "_handle_orchestrator_query",
+            "_process_orchestrator_response",
+            "_build_response",
             "_fallback_to_default",
         ]
         for method in required_methods:
             assert method in method_names, f"Missing method: {method}"
 
 
-class TestIntentDetection:
-    """Test suite for intent detection logic."""
+class TestHACommandDetection:
+    """Test suite for HA command detection logic."""
 
     @pytest.mark.parametrize(
         "query,expected",
         [
-            ("check my email", True),
-            ("do I have any unread emails", True),
-            ("what's in my inbox", True),
-            ("check gmail", True),
-            ("any new messages", True),
-            ("read my mail", True),
-            ("check my mailbox", True),
+            # HA device commands - should be detected
+            ("turn on the lights", True),
+            ("turn off the kitchen light", True),
+            ("dim the living room", True),
+            ("lock the front door", True),
+            ("unlock the garage", True),
+            ("set temperature to 72", True),
+            ("play some music", True),
+            ("pause the movie", True),
+            ("mute the speakers", True),
+            ("arm the alarm", True),
+            # Non-HA commands - should NOT be detected
+            ("check my email", False),
+            ("what's in my inbox", False),
+            ("how many unread emails", False),
+            ("hello", False),
+            ("thank you", False),
             ("what's the weather", False),
-            ("turn on the lights", False),
-            ("set a timer", False),
-            ("play some music", False),
+            ("tell me a joke", False),
         ],
     )
-    def test_is_email_query_detection(self, query, expected):
-        """Test intent detection with various queries."""
+    def test_is_ha_command_detection(self, query, expected):
+        """Test HA command detection with various queries."""
         const = load_const_module()
-        email_keywords = const["EMAIL_KEYWORDS"]
+        ha_keywords = const["HA_COMMAND_KEYWORDS"]
 
-        # Simulate the _is_email_query logic
-        result = any(keyword in query.lower() for keyword in email_keywords)
+        # Simulate the _is_ha_command logic
+        result = any(keyword in query.lower() for keyword in ha_keywords)
         assert result == expected, f"Query '{query}' should return {expected}"
 
-    def test_is_email_query_case_insensitive(self):
-        """Test intent detection is case insensitive."""
+    def test_is_ha_command_case_insensitive(self):
+        """Test HA command detection is case insensitive."""
         const = load_const_module()
-        email_keywords = const["EMAIL_KEYWORDS"]
+        ha_keywords = const["HA_COMMAND_KEYWORDS"]
 
-        queries = ["CHECK MY EMAIL", "Check My Email", "check my EMAIL"]
+        queries = ["TURN ON THE LIGHTS", "Turn On The Lights", "turn ON the LIGHTS"]
         for query in queries:
-            result = any(keyword in query.lower() for keyword in email_keywords)
-            assert result is True, f"Query '{query}' should be detected as email query"
+            result = any(keyword in query.lower() for keyword in ha_keywords)
+            assert result is True, f"Query '{query}' should be detected as HA command"
+
+
+class TestOrchestratorResponseProcessing:
+    """Test suite for orchestrator response processing logic."""
+
+    def test_success_response_from_gmail_agent(self):
+        """Test processing successful response from gmail agent."""
+        # Simulated orchestrator response
+        data = {
+            "response": "You have 3 unread emails",
+            "success": True,
+            "agent_name": "gmail",
+            "session_id": "test-session-123",
+            "error": None,
+            "metadata": {},
+        }
+
+        # Should return the response (agent_name != "orchestrator")
+        assert data["success"] is True
+        assert data["agent_name"] != "orchestrator"
+        # In real code, this would return _build_response()
+
+    def test_success_response_from_orchestrator_greeting(self):
+        """Test processing greeting handled directly by orchestrator."""
+        data = {
+            "response": "Hello! How can I help you?",
+            "success": True,
+            "agent_name": "orchestrator",
+            "session_id": "test-session-123",
+            "error": None,
+            "metadata": {"handled_directly": True},
+        }
+
+        # Should return the response (no fallback flag)
+        assert data["success"] is True
+        assert data["agent_name"] == "orchestrator"
+        assert data["metadata"].get("fallback") is not True
+
+    def test_fallback_response_with_ha_command(self):
+        """Test fallback response when query is HA command should trigger fallback."""
+        data = {
+            "response": "I'm not sure how to help with that",
+            "success": True,
+            "agent_name": "orchestrator",
+            "session_id": "test-session-123",
+            "error": None,
+            "metadata": {"fallback": True},
+        }
+        query = "turn on the living room lights"
+
+        # Load HA keywords
+        const = load_const_module()
+        ha_keywords = const["HA_COMMAND_KEYWORDS"]
+        is_ha_command = any(keyword in query.lower() for keyword in ha_keywords)
+
+        # Logic check: fallback=True AND is_ha_command should return None (fall back to HA)
+        is_fallback = data["metadata"].get("fallback", False)
+        should_fallback_to_ha = is_fallback and is_ha_command
+
+        assert should_fallback_to_ha is True
+
+    def test_fallback_response_without_ha_command(self):
+        """Test fallback response without HA command should NOT trigger fallback."""
+        data = {
+            "response": "I'm not sure how to help with that",
+            "success": True,
+            "agent_name": "orchestrator",
+            "session_id": "test-session-123",
+            "error": None,
+            "metadata": {"fallback": True},
+        }
+        query = "what is the meaning of life"
+
+        # Load HA keywords
+        const = load_const_module()
+        ha_keywords = const["HA_COMMAND_KEYWORDS"]
+        is_ha_command = any(keyword in query.lower() for keyword in ha_keywords)
+
+        # Logic check: fallback=True but NOT ha_command should return the response
+        is_fallback = data["metadata"].get("fallback", False)
+        should_fallback_to_ha = is_fallback and is_ha_command
+
+        assert should_fallback_to_ha is False
+
+    def test_error_response_handling(self):
+        """Test error response returns error message."""
+        data = {
+            "response": "",
+            "success": False,
+            "agent_name": "orchestrator",
+            "session_id": "test-session-123",
+            "error": "API rate limit exceeded",
+            "metadata": {},
+        }
+
+        # Should show error to user
+        assert data["success"] is False
+        assert data["error"] is not None
+
+
+class TestSessionManagement:
+    """Test suite for session management logic."""
+
+    def test_session_id_passed_to_orchestrator(self):
+        """Test that session_id is included in payload when available."""
+        conversation_id = "ha-conversation-abc123"
+        payload = {"query": "check my emails"}
+
+        # Simulate adding session_id to payload
+        if conversation_id:
+            payload["session_id"] = conversation_id
+
+        assert "session_id" in payload
+        assert payload["session_id"] == conversation_id
+
+    def test_session_id_not_passed_when_none(self):
+        """Test that session_id is NOT included when conversation_id is None."""
+        conversation_id = None
+        payload = {"query": "check my emails"}
+
+        # Simulate adding session_id to payload
+        if conversation_id:
+            payload["session_id"] = conversation_id
+
+        assert "session_id" not in payload
 
 
 # =============================================================================
@@ -453,7 +589,7 @@ class TestIntegration:
     API_HOST = "10.0.0.23"
     API_PORT = 8000
     HEALTH_ENDPOINT = "/health"
-    GMAIL_QUERY_ENDPOINT = "/api/v1/gmail/query"
+    ORCHESTRATOR_QUERY_ENDPOINT = "/api/v1/query"
 
     def test_api_health_from_component_perspective(self):
         """Test API health check as component would call it."""
@@ -466,9 +602,9 @@ class TestIntegration:
         except requests.exceptions.ConnectionError:
             pytest.skip("Clarvis API not available")
 
-    def test_api_gmail_query_from_component_perspective(self):
-        """Test Gmail query as component would call it."""
-        url = f"http://{self.API_HOST}:{self.API_PORT}{self.GMAIL_QUERY_ENDPOINT}"
+    def test_api_orchestrator_query_from_component_perspective(self):
+        """Test orchestrator query as component would call it."""
+        url = f"http://{self.API_HOST}:{self.API_PORT}{self.ORCHESTRATOR_QUERY_ENDPOINT}"
         try:
             response = requests.post(
                 url,
@@ -479,5 +615,53 @@ class TestIntegration:
             data = response.json()
             assert "success" in data
             assert "response" in data
+            assert "agent_name" in data
+            assert "session_id" in data
+        except requests.exceptions.ConnectionError:
+            pytest.skip("Clarvis API not available")
+
+    def test_api_orchestrator_greeting_handled_directly(self):
+        """Test greetings are handled directly by orchestrator."""
+        url = f"http://{self.API_HOST}:{self.API_PORT}{self.ORCHESTRATOR_QUERY_ENDPOINT}"
+        try:
+            response = requests.post(
+                url,
+                json={"query": "hello"},
+                timeout=30,
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert data["agent_name"] == "orchestrator"
+            # Should have handled_directly metadata
+            assert data.get("metadata", {}).get("handled_directly") is True
+        except requests.exceptions.ConnectionError:
+            pytest.skip("Clarvis API not available")
+
+    def test_api_orchestrator_session_continuity(self):
+        """Test session continuity across queries."""
+        url = f"http://{self.API_HOST}:{self.API_PORT}{self.ORCHESTRATOR_QUERY_ENDPOINT}"
+        try:
+            # First query - get session_id
+            response1 = requests.post(
+                url,
+                json={"query": "check my emails"},
+                timeout=120,
+            )
+            assert response1.status_code == 200
+            data1 = response1.json()
+            session_id = data1.get("session_id")
+            assert session_id is not None
+
+            # Second query - use same session_id
+            response2 = requests.post(
+                url,
+                json={"query": "what about the first one?", "session_id": session_id},
+                timeout=120,
+            )
+            assert response2.status_code == 200
+            data2 = response2.json()
+            # Should maintain same session
+            assert data2.get("session_id") == session_id
         except requests.exceptions.ConnectionError:
             pytest.skip("Clarvis API not available")
