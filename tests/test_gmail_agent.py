@@ -3,6 +3,7 @@
 import pytest
 from pathlib import Path
 from datetime import timedelta
+from unittest.mock import patch, AsyncMock
 
 from clarvis_agents.gmail_agent import create_gmail_agent, GmailAgent
 from clarvis_agents.gmail_agent.config import GmailAgentConfig, RateLimiter
@@ -12,6 +13,7 @@ from clarvis_agents.gmail_agent.tools import (
     search_emails_by_date,
     format_email_date,
 )
+from clarvis_agents.core import BaseAgent, AgentResponse, AgentCapability, AgentRegistry
 
 
 class TestGmailAgentConfig:
@@ -264,6 +266,126 @@ class TestGmailAgent:
             await agent.cleanup()
         except Exception as e:
             pytest.skip(f"MCP server not configured: {e}")
+
+
+class TestGmailAgentBaseAgent:
+    """Test suite for GmailAgent BaseAgent interface implementation."""
+
+    @pytest.fixture(autouse=True)
+    def reset_registry(self):
+        """Reset the registry before and after each test."""
+        AgentRegistry.reset_instance()
+        yield
+        AgentRegistry.reset_instance()
+
+    def test_inherits_from_base_agent(self):
+        """Test that GmailAgent inherits from BaseAgent."""
+        agent = GmailAgent()
+        assert isinstance(agent, BaseAgent)
+
+    def test_name_property(self):
+        """Test that name property returns 'gmail'."""
+        agent = GmailAgent()
+        assert agent.name == "gmail"
+
+    def test_description_property(self):
+        """Test that description property returns expected value."""
+        agent = GmailAgent()
+        assert agent.description == "Check, search, and read Gmail emails"
+
+    def test_capabilities_property(self):
+        """Test that capabilities property returns correct structure."""
+        agent = GmailAgent()
+        capabilities = agent.capabilities
+
+        assert len(capabilities) == 4
+        assert all(isinstance(cap, AgentCapability) for cap in capabilities)
+
+        # Check capability names
+        cap_names = [cap.name for cap in capabilities]
+        assert "check_inbox" in cap_names
+        assert "search_emails" in cap_names
+        assert "read_email" in cap_names
+        assert "summarize" in cap_names
+
+        # Check structure of first capability
+        check_inbox_cap = next(cap for cap in capabilities if cap.name == "check_inbox")
+        assert check_inbox_cap.description == "Check inbox for new or unread emails"
+        assert len(check_inbox_cap.keywords) > 0
+        assert len(check_inbox_cap.examples) > 0
+        assert "inbox" in check_inbox_cap.keywords
+
+    @pytest.mark.asyncio
+    async def test_process_success(self):
+        """Test that process method returns AgentResponse on success."""
+        agent = GmailAgent()
+
+        # Mock the internal async method to avoid actual API calls
+        with patch.object(agent, "_check_emails_async", new_callable=AsyncMock) as mock_check:
+            mock_check.return_value = "You have 5 unread emails."
+
+            response = await agent.process("Check my unread emails")
+
+            assert isinstance(response, AgentResponse)
+            assert response.success is True
+            assert response.agent_name == "gmail"
+            assert response.content == "You have 5 unread emails."
+            assert response.error is None
+            mock_check.assert_called_once_with("Check my unread emails")
+
+    @pytest.mark.asyncio
+    async def test_process_error_handling(self):
+        """Test that process method handles errors gracefully."""
+        agent = GmailAgent()
+
+        # Mock the internal async method to raise an exception
+        with patch.object(agent, "_check_emails_async", new_callable=AsyncMock) as mock_check:
+            mock_check.side_effect = RuntimeError("Connection failed")
+
+            response = await agent.process("Check my emails")
+
+            assert isinstance(response, AgentResponse)
+            assert response.success is False
+            assert response.agent_name == "gmail"
+            assert "Error checking emails" in response.content
+            assert response.error == "Connection failed"
+
+    def test_health_check(self):
+        """Test that health_check returns True."""
+        agent = GmailAgent()
+        assert agent.health_check() is True
+
+    def test_can_register_with_registry(self):
+        """Test that GmailAgent can be registered with AgentRegistry."""
+        agent = GmailAgent()
+        registry = AgentRegistry()
+
+        registry.register(agent)
+
+        assert "gmail" in registry.list_agents()
+        assert registry.get("gmail") is agent
+
+    def test_registry_capabilities_include_gmail(self):
+        """Test that registry reports Gmail agent capabilities correctly."""
+        agent = GmailAgent()
+        registry = AgentRegistry()
+        registry.register(agent)
+
+        all_caps = registry.get_all_capabilities()
+
+        assert "gmail" in all_caps
+        assert len(all_caps["gmail"]) == 4
+
+    def test_registry_health_check_includes_gmail(self):
+        """Test that registry health check includes Gmail agent."""
+        agent = GmailAgent()
+        registry = AgentRegistry()
+        registry.register(agent)
+
+        health = registry.health_check_all()
+
+        assert "gmail" in health
+        assert health["gmail"] is True
 
 
 # Fixtures for integration tests

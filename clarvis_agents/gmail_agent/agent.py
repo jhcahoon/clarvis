@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 
 from claude_agent_sdk import query, ClaudeAgentOptions, ClaudeSDKClient
 
+from ..core import BaseAgent, AgentResponse, AgentCapability
+from ..core.context import ConversationContext
 from .config import GmailAgentConfig, RateLimiter
 from .prompts import SYSTEM_PROMPT
 
@@ -18,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class GmailAgent:
+class GmailAgent(BaseAgent):
     """Gmail checking agent using Claude Agent SDK."""
 
     def __init__(self, config: Optional[GmailAgentConfig] = None):
@@ -34,6 +36,75 @@ class GmailAgent:
             max_calls=self.config.max_searches_per_minute,
             time_window=timedelta(minutes=1)
         )
+
+    # BaseAgent interface implementation
+
+    @property
+    def name(self) -> str:
+        """Unique identifier for this agent."""
+        return "gmail"
+
+    @property
+    def description(self) -> str:
+        """Human-readable description of what this agent does."""
+        return "Check, search, and read Gmail emails"
+
+    @property
+    def capabilities(self) -> list[AgentCapability]:
+        """List of capabilities this agent provides."""
+        return [
+            AgentCapability(
+                name="check_inbox",
+                description="Check inbox for new or unread emails",
+                keywords=["inbox", "unread", "new emails", "messages"],
+                examples=["Check my unread emails", "Any new messages?"],
+            ),
+            AgentCapability(
+                name="search_emails",
+                description="Search emails by sender, subject, date, or keywords",
+                keywords=["search", "find", "emails from", "emails about"],
+                examples=["Find emails from John", "Search for project updates"],
+            ),
+            AgentCapability(
+                name="read_email",
+                description="Read full email content and threads",
+                keywords=["read", "show", "open", "content"],
+                examples=["Read the latest email", "Show me that thread"],
+            ),
+            AgentCapability(
+                name="summarize",
+                description="Summarize emails or threads",
+                keywords=["summarize", "summary", "overview"],
+                examples=["Summarize my recent emails", "Give me an overview"],
+            ),
+        ]
+
+    async def process(
+        self, query: str, context: Optional[ConversationContext] = None
+    ) -> AgentResponse:
+        """Process a query and return a response."""
+        try:
+            response_text = await self._check_emails_async(query)
+            return AgentResponse(
+                content=response_text,
+                success=True,
+                agent_name=self.name,
+            )
+        except Exception as e:
+            logger.error(f"Error in process: {e}", exc_info=True)
+            return AgentResponse(
+                content=f"Error checking emails: {str(e)}",
+                success=False,
+                agent_name=self.name,
+                error=str(e),
+            )
+
+    def health_check(self) -> bool:
+        """Check if the agent is operational."""
+        # Basic check - could be enhanced to verify MCP server availability
+        return True
+
+    # Private methods
 
     def _setup_logging(self) -> None:
         """Configure audit logging for email access."""
