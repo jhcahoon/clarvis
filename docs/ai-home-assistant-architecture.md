@@ -1,6 +1,6 @@
 # AI Home Assistant - Technical Architecture
 
-**Last Updated:** January 12, 2026
+**Last Updated:** January 13, 2026
 
 ---
 
@@ -193,6 +193,7 @@ clarvis_agents/
 │   └── prompts.py          # Router system prompts
 ├── gmail_agent/
 │   ├── __init__.py
+│   ├── agent.py            # GmailAgent class (implements BaseAgent)
 │   ├── config.py           # GmailAgentConfig, RateLimiter
 │   ├── prompts.py          # System prompts
 │   └── tools.py            # Helper tools
@@ -407,12 +408,20 @@ The Gmail Agent is fully implemented and accessible via the Clarvis API Server.
 
 **Location:** `clarvis_agents/gmail_agent/`
 
+**Implements:** `BaseAgent` interface (can be registered with orchestrator)
+
 **Features:**
 - Natural language email queries via Claude Agent SDK
 - MCP (Model Context Protocol) integration for Gmail access
 - Read-only mode for safety (blocks send/delete/modify operations)
 - Rate limiting via sliding window algorithm
 - OAuth authentication via `~/.gmail-mcp/` credentials
+
+**Capabilities:**
+- `check_inbox` - Check inbox for new or unread emails
+- `search_emails` - Search emails by sender, subject, date, or keywords
+- `read_email` - Read full email content and threads
+- `summarize` - Summarize emails or threads
 
 **Usage:**
 ```python
@@ -429,15 +438,15 @@ curl -X POST http://10.0.0.23:8000/api/v1/gmail/query \
      -d '{"query": "check my unread emails"}'
 ```
 
-### Future Agents (Planned)
+### Agent Status
 
 | Agent | Location | Status | Reason |
 |-------|----------|--------|--------|
 | Gmail Agent | Local (UN100P) | ✅ Implemented | Privacy - email content stays local |
+| Router/Orchestrator | Local (UN100P) | ✅ Implemented | Low latency, controls routing |
 | Calendar Agent | AWS Lambda | Planned | Low sensitivity, benefits from cloud |
 | Weather Agent | AWS Lambda | Planned | Public data, stateless |
 | Events Agent | AWS Lambda | Planned | Public data, stateless |
-| Router/Orchestrator | Local (UN100P) | Planned | Low latency, controls routing |
 
 ### MCP Server Integration
 
@@ -567,3 +576,4 @@ options = ClaudeAgentOptions(
 | 2026-01-12 | 2.2 | Added orchestrator module with IntentClassifier for code-based routing (Issue #12); Added orchestrator_config.json |
 | 2026-01-12 | 2.3 | Added IntentRouter with hybrid code/LLM routing (Issue #13); Added router.py and prompts.py to orchestrator module |
 | 2026-01-12 | 2.4 | Added OrchestratorAgent with session management and routing coordination (Issue #14); Added agent.py with create_orchestrator factory |
+| 2026-01-13 | 2.5 | GmailAgent now implements BaseAgent interface for orchestrator integration (Issue #15); Updated agent status table |
