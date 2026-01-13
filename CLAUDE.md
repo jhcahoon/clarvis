@@ -83,6 +83,66 @@ clarvis_agents/
 - `GET /docs` - Swagger UI documentation
 - `POST /api/v1/gmail/query` - Query Gmail agent
 
+### Home Assistant Custom Component
+
+The custom component is located at `homeassistant/custom_components/clarvis/` and must be deployed to the Home Assistant instance.
+
+**Component Structure:**
+```
+homeassistant/custom_components/clarvis/
+├── __init__.py          # Component setup
+├── config_flow.py       # Configuration UI
+├── conversation.py      # Conversation agent entity
+├── const.py             # Constants
+├── manifest.json        # Component metadata
+├── strings.json         # UI strings (source)
+└── translations/
+    └── en.json          # UI strings (runtime)
+```
+
+**Key Requirements:**
+- `translations/en.json` is REQUIRED - HA won't load the component without it
+- `OptionsFlow` in HA 2025.12+ must NOT set `self.config_entry` in `__init__` (it's a property now)
+
+### Deploying to Home Assistant OS (HAOS)
+
+**IMPORTANT:** The SSH add-on runs in a container with different mount points than the host OS.
+
+**Correct path for custom components:** `/config/custom_components/`
+
+**DO NOT USE:** `/mnt/data/supervisor/homeassistant/` - this is visible from the Hyper-V console but NOT from the SSH add-on container.
+
+**SSH Connection (requires Terminal & SSH add-on):**
+```bash
+# From Windows - must specify MAC algorithm for HAOS compatibility
+ssh -o MACs=hmac-sha2-256-etm@openssh.com root@<HA_IP>
+
+# Example
+ssh -o MACs=hmac-sha2-256-etm@openssh.com root@10.0.0.219
+```
+
+**Deploying files via SSH:**
+```bash
+# Create directory structure
+mkdir -p /config/custom_components/clarvis/translations
+
+# Create files using echo (heredocs don't work well in HAOS zsh)
+echo '{"domain":"clarvis",...}' > /config/custom_components/clarvis/manifest.json
+
+# For multi-line Python files, use multiple echo commands with >>
+echo 'line1' > /config/custom_components/clarvis/file.py
+echo 'line2' >> /config/custom_components/clarvis/file.py
+
+# Restart HA to load the component
+ha core restart
+```
+
+**Verifying deployment:**
+```bash
+ls -la /config/custom_components/clarvis/
+ha core logs | grep -i clarvis
+```
+
 ### Configuration
 
 - `configs/gmail_agent_config.json` - Agent settings, permissions, rate limits
