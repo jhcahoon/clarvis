@@ -9,6 +9,10 @@
     "gmail": {
       "enabled": true,
       "timeout_seconds": 120
+    },
+    "orchestrator": {
+      "enabled": true,
+      "timeout_seconds": 180
     }
   }
 }

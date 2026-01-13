@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import load_config
-from .routes import health_router, gmail_router
+from .routes import health_router, gmail_router, orchestrator_router
 
 # Setup logging
 logging.basicConfig(
@@ -53,6 +53,7 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(health_router)
     app.include_router(gmail_router)
+    app.include_router(orchestrator_router)
 
     return app
 

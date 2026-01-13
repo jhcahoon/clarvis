@@ -213,7 +213,9 @@ scripts/
 | `/` | GET | Root endpoint with API info |
 | `/health` | GET | Health check, returns server status and available agents |
 | `/docs` | GET | Swagger UI documentation |
-| `/api/v1/gmail/query` | POST | Query the Gmail agent with natural language |
+| `/api/v1/query` | POST | Query the orchestrator (routes to appropriate agent) |
+| `/api/v1/agents` | GET | List available agents and their capabilities |
+| `/api/v1/gmail/query` | POST | Query the Gmail agent directly (bypasses orchestrator) |
 
 ### Configuration
 
@@ -230,6 +232,10 @@ scripts/
     "gmail": {
       "enabled": true,
       "timeout_seconds": 120
+    },
+    "orchestrator": {
+      "enabled": true,
+      "timeout_seconds": 180
     }
   }
 }
@@ -564,6 +570,16 @@ options = ClaudeAgentOptions(
 - [ ] Configure Assist pipeline to use Clarvis agent
 - [ ] Test voice → agent → voice loop
 
+### Phase 6: API Integration for Orchestrator (✅ Complete - Issue #16)
+
+- [x] Create orchestrator endpoints (`clarvis_agents/api/routes/orchestrator.py`)
+- [x] Add `POST /api/v1/query` endpoint for orchestrator queries
+- [x] Add `GET /api/v1/agents` endpoint for agent discovery
+- [x] Update health endpoint to show orchestrator status
+- [x] Add orchestrator to API configuration (`configs/api_config.json`)
+- [x] Add comprehensive tests (`tests/test_api_orchestrator.py`)
+- [x] Update API documentation
+
 ---
 
 ## Revision History
@@ -577,3 +593,4 @@ options = ClaudeAgentOptions(
 | 2026-01-12 | 2.3 | Added IntentRouter with hybrid code/LLM routing (Issue #13); Added router.py and prompts.py to orchestrator module |
 | 2026-01-12 | 2.4 | Added OrchestratorAgent with session management and routing coordination (Issue #14); Added agent.py with create_orchestrator factory |
 | 2026-01-13 | 2.5 | GmailAgent now implements BaseAgent interface for orchestrator integration (Issue #15); Updated agent status table |
+| 2026-01-13 | 2.6 | Added orchestrator API endpoints (Issue #16); Added POST /api/v1/query and GET /api/v1/agents; Updated API config and health endpoint |
