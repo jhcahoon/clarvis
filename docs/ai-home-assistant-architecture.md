@@ -241,6 +241,50 @@ scripts/
 }
 ```
 
+**File:** `configs/orchestrator_config.json`
+```json
+{
+  "orchestrator": {
+    "model": "claude-sonnet-4-20250514",
+    "router_model": "claude-3-5-haiku-20241022",
+    "session_timeout_minutes": 30,
+    "max_turns": 5
+  },
+  "routing": {
+    "code_routing_threshold": 0.7,
+    "llm_routing_enabled": true,
+    "follow_up_detection": true,
+    "default_agent": null
+  },
+  "agents": {
+    "gmail": { "enabled": true, "priority": 1 },
+    "calendar": { "enabled": false, "priority": 2 },
+    "weather": { "enabled": false, "priority": 3 },
+    "events": { "enabled": false, "priority": 4 }
+  },
+  "logging": {
+    "level": "INFO",
+    "log_routing_decisions": true,
+    "log_agent_responses": true
+  }
+}
+```
+
+**Orchestrator Configuration Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `model` | claude-sonnet-4 | Model for direct responses |
+| `router_model` | claude-3-5-haiku | Model for LLM routing (can be faster/cheaper) |
+| `session_timeout_minutes` | 30 | Session expiry time |
+| `max_turns` | 5 | Maximum conversation turns per session |
+| `code_routing_threshold` | 0.7 | Confidence threshold for code-based routing |
+| `llm_routing_enabled` | true | Enable LLM fallback routing |
+| `follow_up_detection` | true | Detect and route follow-up queries |
+| `default_agent` | null | Default agent when routing is ambiguous |
+| `log_routing_decisions` | true | Log all routing decisions |
+| `log_agent_responses` | true | Log agent responses |
+
 ### Starting the Server
 
 ```bash
@@ -594,3 +638,4 @@ options = ClaudeAgentOptions(
 | 2026-01-12 | 2.4 | Added OrchestratorAgent with session management and routing coordination (Issue #14); Added agent.py with create_orchestrator factory |
 | 2026-01-13 | 2.5 | GmailAgent now implements BaseAgent interface for orchestrator integration (Issue #15); Updated agent status table |
 | 2026-01-13 | 2.6 | Added orchestrator API endpoints (Issue #16); Added POST /api/v1/query and GET /api/v1/agents; Updated API config and health endpoint |
+| 2026-01-13 | 2.7 | Enhanced orchestrator configuration (Issue #17); Migrated to nested config structure with orchestrator/routing/agents/logging sections; Added configuration options table |

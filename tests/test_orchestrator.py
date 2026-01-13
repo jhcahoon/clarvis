@@ -313,12 +313,26 @@ class TestOrchestratorConfig:
         """Test configuration defaults."""
         config = OrchestratorConfig()
 
+        # Orchestrator settings
         assert config.model == "claude-sonnet-4-20250514"
         assert config.router_model == "claude-3-5-haiku-20241022"
         assert config.session_timeout_minutes == 30
+        assert config.max_turns == 5
+
+        # Routing settings
         assert config.code_routing_threshold == 0.7
         assert config.llm_routing_enabled is True
         assert config.follow_up_detection is True
+        assert config.default_agent is None
+
+        # Agent settings
+        assert config.enabled_agents == {"gmail": True}
+        assert config.agent_priorities == {"gmail": 1}
+
+        # Logging settings
+        assert config.log_level == "INFO"
+        assert config.log_routing_decisions is True
+        assert config.log_agent_responses is True
 
     def test_config_custom_values(self):
         """Test configuration with custom values."""
@@ -326,17 +340,31 @@ class TestOrchestratorConfig:
             model="claude-opus-4-20250514",
             router_model="claude-3-haiku-20240307",
             session_timeout_minutes=60,
+            max_turns=10,
             code_routing_threshold=0.8,
             llm_routing_enabled=False,
             follow_up_detection=False,
+            default_agent="gmail",
+            enabled_agents={"gmail": True, "calendar": True},
+            agent_priorities={"gmail": 1, "calendar": 2},
+            log_level="DEBUG",
+            log_routing_decisions=False,
+            log_agent_responses=False,
         )
 
         assert config.model == "claude-opus-4-20250514"
         assert config.router_model == "claude-3-haiku-20240307"
         assert config.session_timeout_minutes == 60
+        assert config.max_turns == 10
         assert config.code_routing_threshold == 0.8
         assert config.llm_routing_enabled is False
         assert config.follow_up_detection is False
+        assert config.default_agent == "gmail"
+        assert config.enabled_agents == {"gmail": True, "calendar": True}
+        assert config.agent_priorities == {"gmail": 1, "calendar": 2}
+        assert config.log_level == "DEBUG"
+        assert config.log_routing_decisions is False
+        assert config.log_agent_responses is False
 
     def test_config_threshold_range(self):
         """Test that threshold can be set to boundary values."""
@@ -436,6 +464,180 @@ class TestOrchestratorConfig:
         assert isinstance(config, OrchestratorConfig)
         assert config.model is not None
         assert config.threshold if hasattr(config, "threshold") else True
+
+    def test_from_file_nested_structure(self):
+        """Test that from_file correctly parses nested JSON structure."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            json.dump(
+                {
+                    "orchestrator": {
+                        "model": "claude-opus-4-20250514",
+                        "router_model": "claude-3-haiku-20240307",
+                        "session_timeout_minutes": 45,
+                        "max_turns": 10,
+                    },
+                    "routing": {
+                        "code_routing_threshold": 0.8,
+                        "llm_routing_enabled": False,
+                        "follow_up_detection": False,
+                        "default_agent": "gmail",
+                    },
+                    "agents": {
+                        "gmail": {"enabled": True, "priority": 1},
+                        "calendar": {"enabled": True, "priority": 2},
+                        "weather": {"enabled": False, "priority": 3},
+                    },
+                    "logging": {
+                        "level": "DEBUG",
+                        "log_routing_decisions": False,
+                        "log_agent_responses": True,
+                    },
+                },
+                f,
+            )
+            temp_path = Path(f.name)
+
+        try:
+            config = OrchestratorConfig.from_file(temp_path)
+
+            # Orchestrator settings
+            assert config.model == "claude-opus-4-20250514"
+            assert config.router_model == "claude-3-haiku-20240307"
+            assert config.session_timeout_minutes == 45
+            assert config.max_turns == 10
+
+            # Routing settings
+            assert config.code_routing_threshold == 0.8
+            assert config.llm_routing_enabled is False
+            assert config.follow_up_detection is False
+            assert config.default_agent == "gmail"
+
+            # Agent settings
+            assert config.enabled_agents == {
+                "gmail": True,
+                "calendar": True,
+                "weather": False,
+            }
+            assert config.agent_priorities == {
+                "gmail": 1,
+                "calendar": 2,
+                "weather": 3,
+            }
+
+            # Logging settings
+            assert config.log_level == "DEBUG"
+            assert config.log_routing_decisions is False
+            assert config.log_agent_responses is True
+        finally:
+            temp_path.unlink()
+
+    def test_from_file_nested_partial(self):
+        """Test nested structure with missing sections uses defaults."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            # Only include orchestrator section, others should default
+            json.dump(
+                {
+                    "orchestrator": {
+                        "model": "custom-model",
+                    },
+                },
+                f,
+            )
+            temp_path = Path(f.name)
+
+        try:
+            config = OrchestratorConfig.from_file(temp_path)
+
+            # Custom value from orchestrator section
+            assert config.model == "custom-model"
+            # Defaults for missing orchestrator fields
+            assert config.router_model == "claude-3-5-haiku-20241022"
+            assert config.session_timeout_minutes == 30
+            assert config.max_turns == 5
+
+            # Defaults for missing routing section
+            assert config.code_routing_threshold == 0.7
+            assert config.llm_routing_enabled is True
+            assert config.follow_up_detection is True
+            assert config.default_agent is None
+
+            # Defaults for missing agents section
+            assert config.enabled_agents == {"gmail": True}
+            assert config.agent_priorities == {"gmail": 1}
+
+            # Defaults for missing logging section
+            assert config.log_level == "INFO"
+            assert config.log_routing_decisions is True
+            assert config.log_agent_responses is True
+        finally:
+            temp_path.unlink()
+
+    def test_from_file_agents_section_empty(self):
+        """Test that empty agents section uses defaults."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            json.dump(
+                {
+                    "orchestrator": {"model": "custom-model"},
+                    "agents": {},  # Empty agents section
+                },
+                f,
+            )
+            temp_path = Path(f.name)
+
+        try:
+            config = OrchestratorConfig.from_file(temp_path)
+            # Should use defaults when agents section is empty
+            assert config.enabled_agents == {"gmail": True}
+            assert config.agent_priorities == {"gmail": 1}
+        finally:
+            temp_path.unlink()
+
+    def test_backward_compatibility_flat_config(self):
+        """Test that flat (legacy) config format still works."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            # Flat structure (no nested sections)
+            json.dump(
+                {
+                    "model": "legacy-model",
+                    "router_model": "legacy-router",
+                    "session_timeout_minutes": 20,
+                    "code_routing_threshold": 0.6,
+                    "llm_routing_enabled": False,
+                    "follow_up_detection": False,
+                },
+                f,
+            )
+            temp_path = Path(f.name)
+
+        try:
+            config = OrchestratorConfig.from_file(temp_path)
+
+            # Values from flat config
+            assert config.model == "legacy-model"
+            assert config.router_model == "legacy-router"
+            assert config.session_timeout_minutes == 20
+            assert config.code_routing_threshold == 0.6
+            assert config.llm_routing_enabled is False
+            assert config.follow_up_detection is False
+
+            # Defaults for new fields not in flat config
+            assert config.max_turns == 5
+            assert config.default_agent is None
+            assert config.enabled_agents == {"gmail": True}
+            assert config.agent_priorities == {"gmail": 1}
+            assert config.log_level == "INFO"
+            assert config.log_routing_decisions is True
+            assert config.log_agent_responses is True
+        finally:
+            temp_path.unlink()
 
 
 class TestOrchestratorModuleExports:
