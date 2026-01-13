@@ -17,7 +17,8 @@ async def health_check() -> dict:
         "status": "healthy",
         "version": "1.0.0",
         "agents": {
-            "gmail": "available"
+            "gmail": "available",
+            "orchestrator": "available"
         }
     }
 
