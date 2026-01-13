@@ -1,6 +1,6 @@
 # AI Home Assistant - Technical Architecture
 
-**Last Updated:** January 4, 2026
+**Last Updated:** January 12, 2026
 
 ---
 
@@ -179,6 +179,11 @@ clarvis_agents/
 │       ├── __init__.py
 │       ├── gmail.py        # POST /api/v1/gmail/query
 │       └── health.py       # GET /health
+├── core/                   # Core abstractions for multi-agent architecture
+│   ├── __init__.py         # Exports: BaseAgent, AgentRegistry, ConversationContext
+│   ├── base_agent.py       # BaseAgent ABC, AgentResponse, AgentCapability
+│   ├── agent_registry.py   # AgentRegistry singleton
+│   └── context.py          # ConversationContext, ConversationTurn
 ├── gmail_agent/
 │   ├── __init__.py
 │   ├── config.py           # GmailAgentConfig, RateLimiter
