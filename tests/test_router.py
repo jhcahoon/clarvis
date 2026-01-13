@@ -246,6 +246,16 @@ class TestIntentRouterInit:
         assert router._client is mock_client
         assert router.client is mock_client
 
+    def test_client_raises_error_when_api_key_missing(self):
+        """Test that accessing client raises ValueError when API key not set."""
+        registry = AgentRegistry()
+        config = OrchestratorConfig()
+        router = IntentRouter(registry, config)
+
+        with patch.dict("os.environ", {}, clear=True):
+            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+                _ = router.client
+
 
 class TestDirectHandling:
     """Test suite for _should_handle_directly."""

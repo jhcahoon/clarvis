@@ -71,9 +71,16 @@ class IntentRouter:
 
     @property
     def client(self) -> Anthropic:
-        """Lazy-load Anthropic client."""
+        """Lazy-load Anthropic client.
+
+        Raises:
+            ValueError: If ANTHROPIC_API_KEY environment variable is not set.
+        """
         if self._client is None:
-            self._client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+            self._client = Anthropic(api_key=api_key)
         return self._client
 
     def _should_handle_directly(self, query: str) -> Optional[RoutingDecision]:
