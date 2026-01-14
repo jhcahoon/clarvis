@@ -14,6 +14,7 @@ DEFAULT_TIMEOUT = 120
 # API endpoints
 HEALTH_ENDPOINT = "/health"
 ORCHESTRATOR_QUERY_ENDPOINT = "/api/v1/query"
+ORCHESTRATOR_STREAM_ENDPOINT = "/api/v1/query/stream"
 
 # Home Assistant command keywords for smart fallback detection
 # If orchestrator can't handle a query AND it matches these keywords,

@@ -3,7 +3,7 @@
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 from anthropic import Anthropic
 
@@ -348,6 +348,178 @@ Keep responses concise and friendly."""
                 agent_name=self.name,
                 error=str(e),
             )
+
+    async def stream(
+        self,
+        query: str,
+        context: Optional[ConversationContext] = None,
+        session_id: Optional[str] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream response chunks by routing to appropriate handler.
+
+        Args:
+            query: The user's query.
+            context: Optional existing context. If provided, session_id is ignored.
+            session_id: Optional session ID for session management.
+
+        Yields:
+            String chunks of the response as they become available.
+        """
+        # Get or create context
+        if context is None:
+            context = self.get_or_create_session(session_id)
+
+        logger.info(
+            f"Streaming query: {query[:50]}... (session: {context.session_id})"
+        )
+
+        collected_response = ""
+
+        try:
+            # Route the query
+            decision = await self._router.route(query, context)
+            logger.debug(f"Routing decision: {decision}")
+
+            # Stream based on decision
+            if decision.handle_directly:
+                async for chunk in self._stream_direct(query, context):
+                    collected_response += chunk
+                    yield chunk
+            elif decision.agent_name:
+                async for chunk in self._stream_single_agent(
+                    query, decision, context
+                ):
+                    collected_response += chunk
+                    yield chunk
+            else:
+                async for chunk in self._stream_fallback(query, context):
+                    collected_response += chunk
+                    yield chunk
+
+            # Update context with the complete response
+            context.add_turn(query, collected_response, decision.agent_name or self.name)
+
+        except Exception as e:
+            logger.error(f"Error streaming query: {e}", exc_info=True)
+            error_msg = "I'm sorry, I encountered an error processing your request."
+            yield error_msg
+
+    async def _stream_direct(
+        self,
+        query: str,
+        context: ConversationContext,
+    ) -> AsyncGenerator[str, None]:
+        """Stream direct response without delegating to agents.
+
+        Used for greetings, thanks, and general questions.
+
+        Args:
+            query: The user's query.
+            context: Conversation context.
+
+        Yields:
+            String chunks of the response.
+        """
+        try:
+            client = self._get_client()
+
+            system_prompt = """You are Clarvis, a helpful AI home assistant.
+You can help with email, calendar, weather, and other tasks through specialized agents.
+For greetings, thanks, and general questions, respond naturally and helpfully.
+Keep responses concise and friendly."""
+
+            messages = []
+            if context.turns:
+                recent = context.get_recent_context(n=2)
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"Recent conversation:\n{recent}\n\nNew query: {query}",
+                    }
+                )
+            else:
+                messages.append({"role": "user", "content": query})
+
+            # Use streaming API
+            with client.messages.stream(
+                model=self._config.model,
+                max_tokens=500,
+                system=system_prompt,
+                messages=messages,
+            ) as stream:
+                for text in stream.text_stream:
+                    yield text
+
+        except Exception as e:
+            logger.error(f"Error in direct streaming: {e}")
+            yield "Hello! I'm Clarvis, your AI assistant. How can I help you today?"
+
+    async def _stream_single_agent(
+        self,
+        query: str,
+        decision: RoutingDecision,
+        context: ConversationContext,
+    ) -> AsyncGenerator[str, None]:
+        """Stream response from a single delegated agent.
+
+        Args:
+            query: The user's query.
+            decision: Routing decision with agent name.
+            context: Conversation context.
+
+        Yields:
+            String chunks from the delegated agent.
+        """
+        agent_name = decision.agent_name
+        agent = self._registry.get(agent_name)
+
+        if agent is None:
+            logger.warning(f"Agent '{agent_name}' not found in registry")
+            async for chunk in self._stream_fallback(query, context):
+                yield chunk
+            return
+
+        logger.info(f"Streaming from agent: {agent_name}")
+
+        try:
+            async for chunk in agent.stream(query, context):
+                yield chunk
+        except Exception as e:
+            logger.error(f"Error streaming from agent {agent_name}: {e}", exc_info=True)
+            yield "I tried to help with your request, but encountered an issue. Please try again."
+
+    async def _stream_fallback(
+        self,
+        query: str,
+        context: ConversationContext,
+    ) -> AsyncGenerator[str, None]:
+        """Stream fallback response for unmatched queries.
+
+        Args:
+            query: The user's query.
+            context: Conversation context.
+
+        Yields:
+            String chunks of the fallback message.
+        """
+        logger.info("Using fallback streaming for unmatched query")
+
+        available_agents = self._registry.list_agents()
+
+        if available_agents:
+            agent_list = ", ".join(available_agents)
+            content = (
+                f"I'm not sure how to help with that specific request. "
+                f"I can assist with: {agent_list}. "
+                f"Could you rephrase your question or ask about one of these topics?"
+            )
+        else:
+            content = (
+                "I'm not sure how to help with that request. "
+                "Could you try rephrasing your question?"
+            )
+
+        yield content
 
 
 def create_orchestrator(
