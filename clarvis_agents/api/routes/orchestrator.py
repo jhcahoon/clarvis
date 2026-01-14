@@ -1,9 +1,11 @@
 """Orchestrator endpoints for Clarvis API."""
 
+import json
 import logging
-from typing import List, Optional
+from typing import AsyncGenerator, List, Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ...core import AgentResponse
@@ -138,6 +140,68 @@ async def query_orchestrator(
             session_id=request.session_id or "",
             error=str(e),
         )
+
+
+@router.post("/query/stream")
+async def query_orchestrator_stream(
+    request: OrchestratorQueryRequest,
+) -> StreamingResponse:
+    """
+    Stream a natural language query response through the orchestrator.
+
+    Returns Server-Sent Events (SSE) with response chunks as they arrive.
+    Each event contains a JSON object with a 'text' field.
+    The stream ends with a '[DONE]' message.
+
+    Args:
+        request: The query request containing the natural language query
+                 and optional session_id for conversation continuity.
+
+    Returns:
+        StreamingResponse with text/event-stream content type.
+    """
+    if not request.query or not request.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    logger.info(f"Received streaming query: {request.query[:100]}...")
+    if request.session_id:
+        logger.info(f"Using session: {request.session_id}")
+
+    async def generate() -> AsyncGenerator[str, None]:
+        """Generate SSE events from orchestrator stream."""
+        try:
+            orchestrator = get_orchestrator()
+            context = orchestrator.get_or_create_session(request.session_id)
+
+            async for chunk in orchestrator.stream(
+                query=request.query,
+                context=context,
+            ):
+                # Send each chunk as an SSE event
+                event_data = json.dumps({
+                    "text": chunk,
+                    "session_id": context.session_id
+                })
+                yield f"data: {event_data}\n\n"
+
+            # Signal end of stream
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            logger.error(f"Error in streaming query: {e}", exc_info=True)
+            error_data = json.dumps({"error": str(e)})
+            yield f"data: {error_data}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )
 
 
 @router.get("/agents", response_model=AgentsListResponse)

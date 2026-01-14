@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime, timedelta
 
+from typing import AsyncGenerator
 from claude_agent_sdk import query, ClaudeAgentOptions, ClaudeSDKClient
 
 from ..core import BaseAgent, AgentResponse, AgentCapability
@@ -103,6 +104,55 @@ class GmailAgent(BaseAgent):
         """Check if the agent is operational."""
         # Basic check - could be enhanced to verify MCP server availability
         return True
+
+    async def stream(
+        self, query_text: str, context: Optional[ConversationContext] = None
+    ) -> AsyncGenerator[str, None]:
+        """Stream response chunks for a query.
+
+        Yields text chunks as they arrive from the Claude SDK.
+
+        Args:
+            query_text: Natural language query about emails.
+            context: Optional conversation context (not currently used).
+
+        Yields:
+            String chunks of the response as they become available.
+        """
+        # Check rate limit
+        if not self.rate_limiter.check_rate_limit():
+            yield "Rate limit exceeded. Please wait before making another request."
+            return
+
+        logger.info(f"Streaming email query: {query_text[:100]}...")
+
+        try:
+            options = self._build_agent_options()
+
+            async for message in query(prompt=query_text, options=options):
+                # Extract text from different message types and yield immediately
+                if hasattr(message, 'result'):
+                    text = str(message.result)
+                    if text:
+                        yield text
+                elif hasattr(message, 'text'):
+                    text = str(message.text)
+                    if text:
+                        yield text
+                elif hasattr(message, 'content'):
+                    if isinstance(message.content, str):
+                        if message.content:
+                            yield message.content
+                    elif isinstance(message.content, list):
+                        for block in message.content:
+                            if hasattr(block, 'text') and block.text:
+                                yield block.text
+
+            logger.info("Email query streaming completed")
+
+        except Exception as e:
+            logger.error(f"Error streaming emails: {e}", exc_info=True)
+            yield f"Sorry, I encountered an error: {str(e)}"
 
     # Private methods
 
