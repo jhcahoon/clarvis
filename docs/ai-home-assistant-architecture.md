@@ -1,6 +1,6 @@
 # AI Home Assistant - Technical Architecture
 
-**Last Updated:** January 13, 2026
+**Last Updated:** January 15, 2026
 
 ---
 
@@ -8,10 +8,11 @@
 1. [Infrastructure Overview](#infrastructure-overview)
 2. [Local Infrastructure](#local-infrastructure)
 3. [Clarvis API Server](#clarvis-api-server)
-4. [Network Architecture](#network-architecture)
-5. [Cloud Infrastructure](#cloud-infrastructure-future)
-6. [Agent Architecture](#agent-architecture)
-7. [Security Considerations](#security-considerations)
+4. [Streaming Architecture](#streaming-architecture)
+5. [Network Architecture](#network-architecture)
+6. [Cloud Infrastructure](#cloud-infrastructure-future)
+7. [Agent Architecture](#agent-architecture)
+8. [Security Considerations](#security-considerations)
 
 ---
 
@@ -138,9 +139,21 @@
 
 **Voice Pipeline:**
 ```
-Wake Word → STT (Whisper) → Intent → Agent → Response → TTS (Piper) → Audio
-    │            │                      │                    │
-    └── Device ──┴──── Home Assistant ──┴──── Home Assistant ┘
+Wake Word → STT (Whisper) → Clarvis Agent → TTS (Piper) → Audio
+    │            │               │                │
+    └── Device ──┴───────────────┼────────────────┘
+                                 │
+                         ┌───────▼────────┐
+                         │ Clarvis API    │
+                         │ (SSE Stream)   │
+                         └────────────────┘
+```
+
+**Streaming Pipeline (HA 2025.7+):**
+```
+Voice → STT → Clarvis Component ──SSE──▶ API ──stream()──▶ Agent
+                    │
+                    └──ChatLog.async_add_delta_content_stream()──▶ TTS (streaming)
 ```
 
 ---
@@ -178,7 +191,8 @@ clarvis_agents/
 │   └── routes/
 │       ├── __init__.py
 │       ├── gmail.py        # POST /api/v1/gmail/query
-│       └── health.py       # GET /health
+│       ├── health.py       # GET /health
+│       └── orchestrator.py # POST /api/v1/query, /query/stream, GET /agents
 ├── core/                   # Core abstractions for multi-agent architecture
 │   ├── __init__.py         # Exports: BaseAgent, AgentRegistry, ConversationContext
 │   ├── base_agent.py       # BaseAgent ABC, AgentResponse, AgentCapability
@@ -214,6 +228,7 @@ scripts/
 | `/health` | GET | Health check, returns server status and available agents |
 | `/docs` | GET | Swagger UI documentation |
 | `/api/v1/query` | POST | Query the orchestrator (routes to appropriate agent) |
+| `/api/v1/query/stream` | POST | **Stream** response via SSE (Server-Sent Events) |
 | `/api/v1/agents` | GET | List available agents and their capabilities |
 | `/api/v1/gmail/query` | POST | Query the Gmail agent directly (bypasses orchestrator) |
 
@@ -297,6 +312,168 @@ python scripts/run_api_server.py --port 8080
 # Development mode with auto-reload
 python scripts/run_api_server.py --reload
 ```
+
+---
+
+## Streaming Architecture
+
+The streaming architecture enables real-time voice responses through Home Assistant's TTS system. When a user speaks a query, the response begins playing as soon as the first words are generated, dramatically reducing perceived latency.
+
+### End-to-End Streaming Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Voice Query Streaming Flow                           │
+│                                                                              │
+│  ┌──────────┐    ┌────────────┐    ┌────────────────┐    ┌───────────────┐ │
+│  │ Voice PE │───▶│    STT     │───▶│  Clarvis HA    │───▶│  Clarvis API  │ │
+│  │          │    │  (Whisper) │    │   Component    │    │   (FastAPI)   │ │
+│  └──────────┘    └────────────┘    └───────┬────────┘    └───────┬───────┘ │
+│                                            │                     │         │
+│                                            │   SSE Stream        │         │
+│                                            │◀────────────────────┤         │
+│                                            │  data: {"text":...} │         │
+│                                            │  data: {"text":...} │         │
+│                                            │  data: [DONE]       │         │
+│                                            │                     │         │
+│                                            ▼                     ▼         │
+│  ┌──────────┐    ┌────────────┐    ┌────────────────┐    ┌───────────────┐ │
+│  │ Voice PE │◀───│    TTS     │◀───│    ChatLog     │◀───│  Orchestrator │ │
+│  │ (Speaker)│    │  (Piper)   │    │   (HA 2025.7+) │    │   stream()    │ │
+│  └──────────┘    └────────────┘    └────────────────┘    └───────────────┘ │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Streaming Components
+
+#### 1. API Server: SSE Streaming Endpoint
+
+**Endpoint:** `POST /api/v1/query/stream`
+
+The streaming endpoint uses Server-Sent Events (SSE) to push response chunks as they're generated:
+
+```
+Content-Type: text/event-stream
+
+data: {"text": "You have ", "session_id": "abc123"}
+
+data: {"text": "3 unread emails.", "session_id": "abc123"}
+
+data: [DONE]
+```
+
+**Implementation:** `clarvis_agents/api/routes/orchestrator.py`
+- Uses FastAPI's `StreamingResponse` with `text/event-stream` media type
+- Includes headers to disable buffering (`X-Accel-Buffering: no` for nginx)
+- Async generator yields JSON-encoded chunks
+
+#### 2. Orchestrator Streaming
+
+**Implementation:** `clarvis_agents/orchestrator/agent.py`
+
+The `OrchestratorAgent` implements streaming through the `stream()` method:
+
+```python
+async def stream(self, query, context) -> AsyncGenerator[str, None]:
+    decision = await self._router.route(query, context)
+
+    if decision.handle_directly:
+        async for chunk in self._stream_direct(query, context):
+            yield chunk
+    elif decision.agent_name:
+        async for chunk in self._stream_single_agent(query, decision, context):
+            yield chunk
+    else:
+        async for chunk in self._stream_fallback(query, context):
+            yield chunk
+```
+
+**Streaming Methods:**
+- `_stream_direct()` - Uses Anthropic's `messages.stream()` for direct handling
+- `_stream_single_agent()` - Delegates to agent's `stream()` method
+- `_stream_fallback()` - Yields fallback message in one chunk
+
+#### 3. Agent Streaming Interface
+
+**Implementation:** `clarvis_agents/core/base_agent.py`
+
+The `BaseAgent` abstract class defines an optional `stream()` method:
+
+```python
+async def stream(self, query, context) -> AsyncGenerator[str, None]:
+    """Stream response chunks for a query.
+
+    Default implementation falls back to process() and yields
+    the complete response as a single chunk.
+    """
+    response = await self.process(query, context)
+    yield response.content
+```
+
+Agents can override this to provide true streaming:
+
+- **GmailAgent**: Streams chunks from Claude SDK as they arrive
+- **Future agents**: Can implement streaming or use the default fallback
+
+#### 4. Home Assistant ChatLog Integration
+
+**Implementation:** `homeassistant/custom_components/clarvis/conversation.py`
+
+The Clarvis conversation entity uses Home Assistant's ChatLog API (HA 2025.7+) for streaming TTS:
+
+```python
+class ClarvisConversationEntity(ConversationEntity):
+    _attr_supports_streaming = True  # Enable HA streaming TTS
+
+    async def _async_handle_message(self, user_input, chat_log):
+        async def _transform_stream():
+            yield AssistantContentDeltaDict(role="assistant")
+            async for chunk in self._stream_from_api(user_input):
+                yield AssistantContentDeltaDict(content=chunk)
+
+        async for _ in chat_log.async_add_delta_content_stream(
+            self.entity_id, _transform_stream()
+        ):
+            pass
+
+        return async_get_result_from_chat_log(user_input, chat_log)
+```
+
+**Key Features:**
+- Detects ChatLog API availability at runtime (graceful degradation)
+- Transforms SSE events to HA's `AssistantContentDeltaDict` format
+- Feeds chunks directly to TTS for immediate playback
+
+### Smart Fallback to Home Assistant
+
+The component intelligently routes queries to Home Assistant's default agent when appropriate:
+
+**Home Assistant Command Keywords** (`homeassistant/custom_components/clarvis/const.py`):
+```python
+HA_COMMAND_KEYWORDS = [
+    "turn on", "turn off", "switch on", "switch off",
+    "dim", "brighten", "set temperature", "lock", "unlock",
+    "open", "close", "arm", "disarm", "play", "pause", "stop",
+    "volume", "mute", "unmute"
+]
+```
+
+**Fallback Logic:**
+1. If orchestrator returns a "fallback" response (no agent matched)
+2. AND the query matches HA command keywords
+3. THEN delegate to HA's built-in agent for device control
+
+This ensures device commands like "turn on the living room light" are handled by Home Assistant's native capabilities.
+
+### Version Compatibility
+
+| Home Assistant Version | Streaming Support | Notes |
+|----------------------|-------------------|-------|
+| 2025.7+ | ✅ Full streaming | ChatLog API with `async_add_delta_content_stream()` |
+| Earlier versions | ⚠️ Fallback mode | Non-streaming, waits for complete response |
+
+The component automatically detects the available API and degrades gracefully on older versions.
 
 ---
 
@@ -466,6 +643,7 @@ The Gmail Agent is fully implemented and accessible via the Clarvis API Server.
 - Read-only mode for safety (blocks send/delete/modify operations)
 - Rate limiting via sliding window algorithm
 - OAuth authentication via `~/.gmail-mcp/` credentials
+- **Streaming support** via `stream()` method for real-time TTS
 
 **Capabilities:**
 - `check_inbox` - Check inbox for new or unread emails
@@ -634,6 +812,19 @@ options = ClaudeAgentOptions(
 - [x] Achieve 99% test coverage for core and orchestrator modules (target was >80%)
 - [x] 338 unit tests passing
 
+### Phase 9: Streaming Support (✅ Complete - Issue #19)
+
+- [x] Add `stream()` method to `BaseAgent` abstract class with default fallback
+- [x] Implement `stream()` in `GmailAgent` for real-time response streaming
+- [x] Add streaming methods to `OrchestratorAgent` (`stream()`, `_stream_direct()`, `_stream_single_agent()`, `_stream_fallback()`)
+- [x] Create SSE streaming endpoint `POST /api/v1/query/stream` in API routes
+- [x] Update HA component with `_attr_supports_streaming = True`
+- [x] Implement ChatLog integration (`_async_handle_message()`) for HA 2025.7+
+- [x] Add SSE client (`_stream_from_api()`) to consume streaming API
+- [x] Implement smart fallback with `HA_COMMAND_KEYWORDS` for device control
+- [x] Add graceful degradation for older HA versions without ChatLog API
+- [x] Update tests for streaming functionality
+
 ---
 
 ## Revision History
@@ -650,3 +841,4 @@ options = ClaudeAgentOptions(
 | 2026-01-13 | 2.6 | Added orchestrator API endpoints (Issue #16); Added POST /api/v1/query and GET /api/v1/agents; Updated API config and health endpoint |
 | 2026-01-13 | 2.7 | Enhanced orchestrator configuration (Issue #17); Migrated to nested config structure with orchestrator/routing/agents/logging sections; Added configuration options table |
 | 2026-01-13 | 2.8 | Reorganized tests into nested structure (Issue #18); Created tests/test_core/ and tests/test_orchestrator/ directories; Added comprehensive edge case tests; Achieved 99% test coverage |
+| 2026-01-15 | 2.9 | Added streaming architecture (Issue #19); New SSE endpoint `/api/v1/query/stream`; Added `stream()` method to BaseAgent, OrchestratorAgent, and GmailAgent; HA component updated with ChatLog streaming support for HA 2025.7+; Smart fallback to HA default agent for device commands |
