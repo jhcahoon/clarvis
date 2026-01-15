@@ -19,6 +19,13 @@ from .router import IntentRouter, RoutingDecision
 
 logger = logging.getLogger(__name__)
 
+# Routing announcements for voice feedback when delegating to agents
+ROUTING_ANNOUNCEMENTS = {
+    "gmail": "Checking your email. ",
+    "calendar": "Looking at your calendar. ",
+    "weather": "Getting the weather. ",
+}
+
 
 class OrchestratorAgent(BaseAgent):
     """Central orchestrator that routes queries to appropriate agents.
@@ -175,11 +182,16 @@ class OrchestratorAgent(BaseAgent):
         try:
             client = self._get_client()
 
-            # Build system prompt
+            # Build system prompt with voice guidelines
             system_prompt = """You are Clarvis, a helpful AI home assistant.
 You can help with email, calendar, weather, and other tasks through specialized agents.
 For greetings, thanks, and general questions, respond naturally and helpfully.
-Keep responses concise and friendly."""
+
+VOICE OUTPUT GUIDELINES:
+- Keep responses concise (1-2 sentences)
+- Do NOT end with questions unless you need clarification to proceed
+- Do NOT offer follow-up options like "Would you like..." or "Let me know if..."
+- Use natural, conversational language appropriate for spoken output"""
 
             # Include recent context
             messages = []
@@ -423,10 +435,16 @@ Keep responses concise and friendly."""
         try:
             client = self._get_client()
 
+            # System prompt with voice guidelines
             system_prompt = """You are Clarvis, a helpful AI home assistant.
 You can help with email, calendar, weather, and other tasks through specialized agents.
 For greetings, thanks, and general questions, respond naturally and helpfully.
-Keep responses concise and friendly."""
+
+VOICE OUTPUT GUIDELINES:
+- Keep responses concise (1-2 sentences)
+- Do NOT end with questions unless you need clarification to proceed
+- Do NOT offer follow-up options like "Would you like..." or "Let me know if..."
+- Use natural, conversational language appropriate for spoken output"""
 
             messages = []
             if context.turns:
@@ -480,6 +498,10 @@ Keep responses concise and friendly."""
             return
 
         logger.info(f"Streaming from agent: {agent_name}")
+
+        # Yield routing announcement for immediate voice feedback
+        announcement = ROUTING_ANNOUNCEMENTS.get(agent_name, "Let me check on that. ")
+        yield announcement
 
         try:
             async for chunk in agent.stream(query, context):
