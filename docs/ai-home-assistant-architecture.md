@@ -1,6 +1,6 @@
 # AI Home Assistant - Technical Architecture
 
-**Last Updated:** January 15, 2026
+**Last Updated:** January 16, 2026
 
 ---
 
@@ -612,7 +612,7 @@ New-NetFirewallRule -DisplayName 'Clarvis API Server' `
 
 ### Current Implementation
 
-The Gmail Agent is fully implemented and accessible via the Clarvis API Server.
+The Gmail Agent and Ski Agent are fully implemented and accessible via the Clarvis API Server.
 
 ```
 ┌──────────────┐     ┌───────────────────┐     ┌─────────────────┐
@@ -666,11 +666,54 @@ curl -X POST http://10.0.0.23:8000/api/v1/gmail/query \
      -d '{"query": "check my unread emails"}'
 ```
 
+### Ski Agent
+
+**Location:** `clarvis_agents/ski_agent/`
+
+**Implements:** `BaseAgent` interface (can be registered with orchestrator)
+
+**Features:**
+- Ski conditions reporting for Mt Hood Meadows
+- MCP (Model Context Protocol) integration for web fetching
+- Rate limiting via sliding window algorithm
+- Caching of conditions data to minimize requests
+- **Streaming support** via `stream()` method for real-time TTS
+
+**Capabilities:**
+- `snow_conditions` - Report snow depths and recent snowfall
+- `lift_status` - Report which lifts are open or on hold
+- `weather` - Report mountain weather conditions
+- `full_report` - Comprehensive ski conditions report
+
+**Data Source:** `https://cloudserv.skihood.com/`
+
+**Usage:**
+```python
+from clarvis_agents.ski_agent import SkiAgent
+
+agent = SkiAgent()
+response = agent.get_conditions("What's the ski report at Meadows?")
+```
+
+**API Access:**
+```bash
+curl -X POST http://10.0.0.23:8000/api/v1/query \
+     -H "Content-Type: application/json" \
+     -d '{"query": "what is the ski report at meadows"}'
+```
+
+**Voice Examples:**
+- "What's the ski report at Meadows?"
+- "How much snow at Hood?"
+- "Are the lifts running?"
+- "What's the powder like?"
+
 ### Agent Status
 
 | Agent | Location | Status | Reason |
 |-------|----------|--------|--------|
 | Gmail Agent | Local (UN100P) | ✅ Implemented | Privacy - email content stays local |
+| Ski Agent | Local (UN100P) | ✅ Implemented | Low latency, local data aggregation |
 | Router/Orchestrator | Local (UN100P) | ✅ Implemented | Low latency, controls routing |
 | Calendar Agent | AWS Lambda | Planned | Low sensitivity, benefits from cloud |
 | Weather Agent | AWS Lambda | Planned | Public data, stateless |
@@ -696,6 +739,7 @@ options = ClaudeAgentOptions(
 
 **Available MCP Servers:**
 - `@gongrzhe/server-gmail-autoauth-mcp` - Gmail access with auto-auth
+- `mcp-server-fetch` - Web content fetching (used by Ski Agent)
 
 ---
 
@@ -842,3 +886,4 @@ options = ClaudeAgentOptions(
 | 2026-01-13 | 2.7 | Enhanced orchestrator configuration (Issue #17); Migrated to nested config structure with orchestrator/routing/agents/logging sections; Added configuration options table |
 | 2026-01-13 | 2.8 | Reorganized tests into nested structure (Issue #18); Created tests/test_core/ and tests/test_orchestrator/ directories; Added comprehensive edge case tests; Achieved 99% test coverage |
 | 2026-01-15 | 2.9 | Added streaming architecture (Issue #19); New SSE endpoint `/api/v1/query/stream`; Added `stream()` method to BaseAgent, OrchestratorAgent, and GmailAgent; HA component updated with ChatLog streaming support for HA 2025.7+; Smart fallback to HA default agent for device commands |
+| 2026-01-16 | 2.10 | Added Ski Agent for Mt Hood Meadows conditions reporting; New `clarvis_agents/ski_agent/` module with BaseAgent implementation; Uses mcp-server-fetch for web requests; Added ski patterns to IntentClassifier; Updated orchestrator routing |

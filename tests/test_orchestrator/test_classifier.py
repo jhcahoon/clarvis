@@ -95,6 +95,7 @@ class TestIntentClassifier:
         assert "gmail" in classifier.AGENT_PATTERNS
         assert "calendar" in classifier.AGENT_PATTERNS
         assert "weather" in classifier.AGENT_PATTERNS
+        assert "ski" in classifier.AGENT_PATTERNS
 
         # Check each agent has keywords and patterns
         for agent_name, config in classifier.AGENT_PATTERNS.items():
@@ -236,6 +237,31 @@ class TestIntentClassifier:
         assert result.agent_name == "weather"
         assert result.confidence >= 0.7
         assert result.needs_llm_routing is False
+
+    def test_classify_ski_high_confidence(self):
+        """Test high confidence classification for ski conditions."""
+        classifier = IntentClassifier()
+        result = classifier.classify("what's the ski report at meadows")
+
+        assert result.agent_name == "ski"
+        assert result.confidence >= 0.7
+        assert result.needs_llm_routing is False
+
+    def test_classify_ski_snow_conditions(self):
+        """Test ski classification for snow-related queries."""
+        classifier = IntentClassifier()
+        result = classifier.classify("how much snow at hood")
+
+        assert result.agent_name == "ski"
+        assert result.confidence >= 0.5
+
+    def test_classify_ski_lift_status(self):
+        """Test ski classification for lift status queries."""
+        classifier = IntentClassifier()
+        result = classifier.classify("are the lifts running at meadows")
+
+        assert result.agent_name == "ski"
+        assert result.confidence >= 0.7
 
     def test_classify_low_confidence_needs_llm(self):
         """Test that low confidence triggers LLM routing."""
@@ -379,6 +405,12 @@ class TestIntentClassifierEdgeCases:
 
         result = classifier.classify("calendar")
         assert result.agent_name == "calendar"
+
+        result = classifier.classify("skiing")
+        assert result.agent_name == "ski"
+
+        result = classifier.classify("meadows")
+        assert result.agent_name == "ski"
 
     def test_classify_punctuation_only(self):
         """Test classification with punctuation-only query."""

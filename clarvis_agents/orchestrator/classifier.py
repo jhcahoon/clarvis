@@ -73,6 +73,28 @@ class IntentClassifier:
                 r"\bwill it\b.*\b(rain|snow|be sunny)\b",
             ],
         },
+        "ski": {
+            "keywords": [
+                "ski",
+                "skiing",
+                "snow",
+                "snowboard",
+                "meadows",
+                "hood",
+                "mountain",
+                "slopes",
+                "powder",
+                "lift",
+                "lifts",
+                "conditions",
+            ],
+            "patterns": [
+                r"\b(ski|snow|skiing)\b.*\b(report|conditions|meadows|hood)\b",
+                r"\b(how|what)\b.*\b(snow|conditions|powder)\b.*\b(meadows|hood|mountain)\b",
+                r"\b(lift|lifts)\b.*\b(open|running|status)\b",
+                r"\b(meadows|hood)\b.*\b(open|conditions|snow)\b",
+            ],
+        },
     }
 
     # Scoring constants
