@@ -95,6 +95,28 @@ class IntentClassifier:
                 r"\b(meadows|hood)\b.*\b(open|conditions|snow)\b",
             ],
         },
+        "notes": {
+            "keywords": [
+                "note",
+                "notes",
+                "list",
+                "reminder",
+                "reminders",
+                "grocery",
+                "groceries",
+                "shopping",
+                "todo",
+                "to-do",
+            ],
+            "patterns": [
+                r"\b(add|put)\b.*\b(to|on)\b.*\b(list|grocery|groceries|shopping)\b",
+                r"\b(what|read|show)\b.*\b(on|in)\b.*\b(list|grocery|groceries)\b",
+                r"\bremind\b.*\bme\b",
+                r"\b(take|make|save)\b.*\bnote\b",
+                r"\b(my|the)\b.*\b(reminders?|list|notes?)\b",
+                r"\bgrocery\b",
+            ],
+        },
     }
 
     # Scoring constants

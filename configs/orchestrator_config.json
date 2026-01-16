@@ -20,17 +20,21 @@
       "enabled": true,
       "priority": 2
     },
-    "calendar": {
-      "enabled": false,
+    "notes": {
+      "enabled": true,
       "priority": 3
     },
-    "weather": {
+    "calendar": {
       "enabled": false,
       "priority": 4
     },
-    "events": {
+    "weather": {
       "enabled": false,
       "priority": 5
+    },
+    "events": {
+      "enabled": false,
+      "priority": 6
     }
   },
   "logging": {

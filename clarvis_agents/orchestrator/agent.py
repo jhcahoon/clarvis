@@ -25,6 +25,7 @@ ROUTING_ANNOUNCEMENTS = {
     "calendar": "Looking at your calendar. ",
     "weather": "Getting the weather. ",
     "ski": "Checking ski conditions. ",
+    "notes": "Checking your notes. ",
 }
 
 
@@ -585,5 +586,18 @@ def create_orchestrator(
             logger.info("Registered Ski agent with orchestrator")
     except (ImportError, TypeError):
         logger.debug("Ski agent not registered")
+
+    try:
+        from ..notes_agent import NotesAgent
+
+        # Check if NotesAgent implements BaseAgent
+        if issubclass(NotesAgent, BaseAgent):
+            from ..notes_agent import create_notes_agent
+
+            notes_agent = create_notes_agent()
+            registry.register(notes_agent)
+            logger.info("Registered Notes agent with orchestrator")
+    except (ImportError, TypeError):
+        logger.debug("Notes agent not registered")
 
     return OrchestratorAgent(config=config, registry=registry)

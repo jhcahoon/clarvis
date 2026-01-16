@@ -1,0 +1,15 @@
+{
+  "agent": {
+    "model": "claude-3-5-haiku-20241022",
+    "max_turns": 10
+  },
+  "storage": {
+    "notes_dir": "~/.clarvis/notes"
+  },
+  "rate_limiting": {
+    "max_requests_per_minute": 30
+  },
+  "logging": {
+    "level": "INFO"
+  }
+}

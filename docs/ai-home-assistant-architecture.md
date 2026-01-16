@@ -1,6 +1,6 @@
 # AI Home Assistant - Technical Architecture
 
-**Last Updated:** January 16, 2026
+**Last Updated:** January 16, 2026 (v2.11)
 
 ---
 
@@ -612,7 +612,7 @@ New-NetFirewallRule -DisplayName 'Clarvis API Server' `
 
 ### Current Implementation
 
-The Gmail Agent and Ski Agent are fully implemented and accessible via the Clarvis API Server.
+The Gmail Agent, Ski Agent, and Notes Agent are fully implemented and accessible via the Clarvis API Server.
 
 ```
 ┌──────────────┐     ┌───────────────────┐     ┌─────────────────┐
@@ -708,12 +708,58 @@ curl -X POST http://10.0.0.23:8000/api/v1/query \
 - "Are the lifts running?"
 - "What's the powder like?"
 
+### Notes Agent
+
+**Location:** `clarvis_agents/notes_agent/`
+
+**Implements:** `BaseAgent` interface (can be registered with orchestrator)
+
+**Features:**
+- Manage notes, lists, reminders, and quick information
+- Native SDK tools for direct file I/O (no external MCP server)
+- JSON file storage in `~/.clarvis/notes/`
+- Fuzzy matching for note names
+- Rate limiting via sliding window algorithm
+- **Streaming support** via `stream()` method for real-time TTS
+
+**Capabilities:**
+- `manage_lists` - Create and manage lists (grocery, shopping, to-do)
+- `reminders` - Store and retrieve reminders
+- `notes` - Save and retrieve general notes and information
+- `list_management` - View, clear, and delete notes and lists
+
+**Storage:** `~/.clarvis/notes/` (local JSON files for privacy)
+
+**Usage:**
+```python
+from clarvis_agents.notes_agent import NotesAgent
+
+agent = NotesAgent()
+response = agent.handle_query("Add milk to my grocery list")
+```
+
+**API Access:**
+```bash
+curl -X POST http://10.0.0.23:8000/api/v1/query \
+     -H "Content-Type: application/json" \
+     -d '{"query": "add milk to my grocery list"}'
+```
+
+**Voice Examples:**
+- "Add milk to my grocery list"
+- "What's on my grocery list?"
+- "Remind me to call the dentist"
+- "Take a note: the garage code is 1234"
+- "What notes do I have?"
+- "Clear my shopping list"
+
 ### Agent Status
 
 | Agent | Location | Status | Reason |
 |-------|----------|--------|--------|
 | Gmail Agent | Local (UN100P) | ✅ Implemented | Privacy - email content stays local |
 | Ski Agent | Local (UN100P) | ✅ Implemented | Low latency, local data aggregation |
+| Notes Agent | Local (UN100P) | ✅ Implemented | Privacy - notes stored locally |
 | Router/Orchestrator | Local (UN100P) | ✅ Implemented | Low latency, controls routing |
 | Calendar Agent | AWS Lambda | Planned | Low sensitivity, benefits from cloud |
 | Weather Agent | AWS Lambda | Planned | Public data, stateless |
@@ -772,6 +818,7 @@ options = ClaudeAgentOptions(
 | Data Type | Sensitivity | Storage Location | Encryption |
 |-----------|-------------|------------------|------------|
 | Email content | High | Local only | Yes |
+| Notes/lists | Medium | Local only | N/A |
 | Calendar events | Medium | Cloud OK | Yes |
 | Weather queries | Low | Cloud OK | N/A |
 | Voice audio | Medium | Processed locally | N/A |
@@ -887,3 +934,4 @@ options = ClaudeAgentOptions(
 | 2026-01-13 | 2.8 | Reorganized tests into nested structure (Issue #18); Created tests/test_core/ and tests/test_orchestrator/ directories; Added comprehensive edge case tests; Achieved 99% test coverage |
 | 2026-01-15 | 2.9 | Added streaming architecture (Issue #19); New SSE endpoint `/api/v1/query/stream`; Added `stream()` method to BaseAgent, OrchestratorAgent, and GmailAgent; HA component updated with ChatLog streaming support for HA 2025.7+; Smart fallback to HA default agent for device commands |
 | 2026-01-16 | 2.10 | Added Ski Agent for Mt Hood Meadows conditions reporting; New `clarvis_agents/ski_agent/` module with BaseAgent implementation; Uses mcp-server-fetch for web requests; Added ski patterns to IntentClassifier; Updated orchestrator routing |
+| 2026-01-16 | 2.11 | Added Notes Agent for notes, lists, and reminders; New `clarvis_agents/notes_agent/` module with BaseAgent implementation; Uses native SDK tools for local JSON file storage in `~/.clarvis/notes/`; Added notes patterns to IntentClassifier; Updated orchestrator routing |
