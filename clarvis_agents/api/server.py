@@ -1,5 +1,13 @@
 """FastAPI server for Clarvis agents."""
 
+import asyncio
+import sys
+
+# Fix Windows asyncio subprocess support - must be set before any async operations
+# This is needed because the Claude Agent SDK spawns subprocesses
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 import logging
 from contextlib import asynccontextmanager
 

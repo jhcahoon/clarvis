@@ -2,8 +2,14 @@
 """Entry point script for running the Clarvis API server."""
 
 import argparse
+import asyncio
 import sys
 from pathlib import Path
+
+# Fix Windows asyncio subprocess support
+# Must be set before any asyncio operations
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
