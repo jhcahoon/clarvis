@@ -16,17 +16,21 @@
       "enabled": true,
       "priority": 1
     },
-    "calendar": {
-      "enabled": false,
+    "ski": {
+      "enabled": true,
       "priority": 2
     },
-    "weather": {
+    "calendar": {
       "enabled": false,
       "priority": 3
     },
-    "events": {
+    "weather": {
       "enabled": false,
       "priority": 4
+    },
+    "events": {
+      "enabled": false,
+      "priority": 5
     }
   },
   "logging": {

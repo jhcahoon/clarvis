@@ -24,6 +24,7 @@ ROUTING_ANNOUNCEMENTS = {
     "gmail": "Checking your email. ",
     "calendar": "Looking at your calendar. ",
     "weather": "Getting the weather. ",
+    "ski": "Checking ski conditions. ",
 }
 
 
@@ -558,9 +559,7 @@ def create_orchestrator(
     config = config or load_config()
     registry = AgentRegistry()
 
-    # Future: Register agents that implement BaseAgent
-    # Gmail agent will be registered here once Issue #15 is complete
-    # and GmailAgent implements BaseAgent
+    # Register agents that implement BaseAgent
     try:
         from ..gmail_agent import GmailAgent
 
@@ -572,7 +571,19 @@ def create_orchestrator(
             registry.register(gmail_agent)
             logger.info("Registered Gmail agent with orchestrator")
     except (ImportError, TypeError):
-        # GmailAgent not available or doesn't implement BaseAgent yet
         logger.debug("Gmail agent not registered (doesn't implement BaseAgent)")
+
+    try:
+        from ..ski_agent import SkiAgent
+
+        # Check if SkiAgent implements BaseAgent
+        if issubclass(SkiAgent, BaseAgent):
+            from ..ski_agent import create_ski_agent
+
+            ski_agent = create_ski_agent()
+            registry.register(ski_agent)
+            logger.info("Registered Ski agent with orchestrator")
+    except (ImportError, TypeError):
+        logger.debug("Ski agent not registered")
 
     return OrchestratorAgent(config=config, registry=registry)
