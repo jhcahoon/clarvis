@@ -4,7 +4,6 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 
 class RateLimiter:
@@ -85,20 +84,3 @@ class SkiAgentConfig:
         """Ensure paths are Path objects."""
         if not isinstance(self.log_dir, Path):
             self.log_dir = Path(self.log_dir)
-
-    def get_mcp_config(self) -> dict[str, Any]:
-        """Returns MCP server configuration dictionary.
-
-        Uses mcp-server-fetch for web requests.
-
-        Returns:
-            Dictionary with MCP server configuration
-        """
-        return {
-            "fetch": {
-                "type": "stdio",
-                "command": "uvx",
-                "args": ["mcp-server-fetch"],
-                "env": {},
-            }
-        }

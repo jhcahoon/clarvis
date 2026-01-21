@@ -188,13 +188,13 @@ class TestSkiAgentPromptBuilding:
     """Test suite for Ski Agent prompt construction."""
 
     def test_build_conditions_prompt(self):
-        """Test that prompt includes URL and user query."""
+        """Test that prompt includes tool reference and user query."""
         agent = SkiAgent()
         prompt = agent._build_conditions_prompt("What's the snow report?")
 
-        assert agent.config.meadows_url in prompt
+        # Prompt should reference the native tool and include the query
+        assert "fetch_ski_conditions" in prompt
         assert "What's the snow report?" in prompt
-        assert "fetch" in prompt.lower()
 
 
 class TestCreateSkiAgent:

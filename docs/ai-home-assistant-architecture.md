@@ -1,6 +1,6 @@
 # AI Home Assistant - Technical Architecture
 
-**Last Updated:** January 16, 2026 (v2.11)
+**Last Updated:** January 19, 2026 (v2.13)
 
 ---
 
@@ -610,6 +610,8 @@ New-NetFirewallRule -DisplayName 'Clarvis API Server' `
 
 ## Agent Architecture
 
+For detailed documentation on the multi-agent orchestration pattern, core abstractions (BaseAgent, AgentRegistry, ConversationContext), routing logic, and how to add new agents, see **[Agent Architecture](agent_architecture.md)**.
+
 ### Current Implementation
 
 The Gmail Agent, Ski Agent, and Notes Agent are fully implemented and accessible via the Clarvis API Server.
@@ -674,7 +676,7 @@ curl -X POST http://10.0.0.23:8000/api/v1/gmail/query \
 
 **Features:**
 - Ski conditions reporting for Mt Hood Meadows
-- MCP (Model Context Protocol) integration for web fetching
+- Native SDK tools with `httpx` for fast web fetching (no external MCP server)
 - Rate limiting via sliding window algorithm
 - Caching of conditions data to minimize requests
 - **Streaming support** via `stream()` method for real-time TTS
@@ -784,8 +786,12 @@ options = ClaudeAgentOptions(
 ```
 
 **Available MCP Servers:**
-- `@gongrzhe/server-gmail-autoauth-mcp` - Gmail access with auto-auth
-- `mcp-server-fetch` - Web content fetching (used by Ski Agent)
+- `@gongrzhe/server-gmail-autoauth-mcp` - Gmail access with auto-auth (external, requires OAuth)
+
+**Native SDK Tools:**
+Agents can also use native Python tools via `create_sdk_mcp_server()` for simpler integrations:
+- Ski Agent uses native `httpx` fetch tool for ski conditions (faster than external MCP)
+- Notes Agent uses native file I/O tools for local JSON storage
 
 ---
 
@@ -935,3 +941,5 @@ options = ClaudeAgentOptions(
 | 2026-01-15 | 2.9 | Added streaming architecture (Issue #19); New SSE endpoint `/api/v1/query/stream`; Added `stream()` method to BaseAgent, OrchestratorAgent, and GmailAgent; HA component updated with ChatLog streaming support for HA 2025.7+; Smart fallback to HA default agent for device commands |
 | 2026-01-16 | 2.10 | Added Ski Agent for Mt Hood Meadows conditions reporting; New `clarvis_agents/ski_agent/` module with BaseAgent implementation; Uses mcp-server-fetch for web requests; Added ski patterns to IntentClassifier; Updated orchestrator routing |
 | 2026-01-16 | 2.11 | Added Notes Agent for notes, lists, and reminders; New `clarvis_agents/notes_agent/` module with BaseAgent implementation; Uses native SDK tools for local JSON file storage in `~/.clarvis/notes/`; Added notes patterns to IntentClassifier; Updated orchestrator routing |
+| 2026-01-16 | 2.12 | Refactored Ski Agent to use native SDK tools instead of external mcp-server-fetch; New `clarvis_agents/ski_agent/tools.py` with httpx-based fetch; Faster startup, no subprocess overhead; Added comprehensive tests for native tools |
+| 2026-01-19 | 2.13 | Added detailed agent architecture documentation (`docs/agent_architecture.md`) with ASCII diagrams showing multi-agent orchestration pattern, core abstractions, routing flow, and how to add new agents |

@@ -11,6 +11,7 @@ from ..core import AgentCapability, AgentResponse, BaseAgent
 from ..core.context import ConversationContext
 from .config import CachedConditions, RateLimiter, SkiAgentConfig
 from .prompts import SYSTEM_PROMPT
+from .tools import ski_tools_server, set_conditions_url
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +34,8 @@ class SkiAgent(BaseAgent):
             time_window=timedelta(minutes=1),
         )
         self._cache: Optional[CachedConditions] = None
+        # Configure the conditions URL for the native tools
+        set_conditions_url(self.config.meadows_url)
 
     # BaseAgent interface implementation
 
@@ -167,26 +170,17 @@ class SkiAgent(BaseAgent):
         logger.info("Ski Agent logging initialized")
 
     def _build_agent_options(self) -> ClaudeAgentOptions:
-        """Build ClaudeAgentOptions with MCP servers and settings.
+        """Build ClaudeAgentOptions with native tools.
 
         Returns:
             Configured ClaudeAgentOptions for the query
         """
-        mcp_config = self.config.get_mcp_config()["fetch"]
-
         options = ClaudeAgentOptions(
             system_prompt=SYSTEM_PROMPT,
-            mcp_servers={
-                "fetch": {
-                    "type": mcp_config["type"],
-                    "command": mcp_config["command"],
-                    "args": mcp_config["args"],
-                    "env": mcp_config.get("env", {}),
-                },
-            },
+            mcp_servers={"ski_tools": ski_tools_server},
             model=self.config.model,
             max_turns=self.config.max_turns,
-            # Skip permission checks for MCP tools
+            # Skip permission checks for native tools
             extra_args={"dangerously-skip-permissions": None},
         )
 
@@ -201,11 +195,9 @@ class SkiAgent(BaseAgent):
         Returns:
             Prompt string for the agent
         """
-        return f"""Please fetch the current ski conditions from {self.config.meadows_url} and answer the following question:
+        return f"""Use the fetch_ski_conditions tool to get the current conditions, then answer:
 
-{user_query}
-
-Use the fetch tool to get the conditions data, then provide a natural, voice-friendly response."""
+{user_query}"""
 
     async def _get_conditions(self, query_text: str) -> str:
         """Get ski conditions for a query.
