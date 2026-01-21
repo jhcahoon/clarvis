@@ -1,14 +1,26 @@
 """Constants for the Clarvis AI Assistant integration."""
 
+import os
+
 DOMAIN = "clarvis"
 
 # Configuration keys
 CONF_API_HOST = "api_host"
 CONF_API_PORT = "api_port"
 
-# Default values
-DEFAULT_API_HOST = "10.0.0.23"
-DEFAULT_API_PORT = 8000
+# Default values - configurable via environment variables
+# For local development, use localhost. For production, set CLARVIS_API_HOST.
+DEFAULT_API_HOST = os.environ.get("CLARVIS_API_HOST", "localhost")
+
+# Parse port with validation and fallback
+try:
+    _port = int(os.environ.get("CLARVIS_API_PORT", "8000"))
+    if not 1 <= _port <= 65535:
+        raise ValueError(f"Port {_port} out of valid range (1-65535)")
+    DEFAULT_API_PORT = _port
+except (ValueError, TypeError):
+    DEFAULT_API_PORT = 8000  # Fallback to safe default
+
 DEFAULT_TIMEOUT = 120
 
 # API endpoints

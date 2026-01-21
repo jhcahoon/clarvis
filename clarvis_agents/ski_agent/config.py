@@ -10,7 +10,7 @@ from pathlib import Path
 class RateLimiter:
     """Thread-safe rate limiter using sliding window algorithm."""
 
-    def __init__(self, max_calls: int, time_window: timedelta):
+    def __init__(self, max_calls: int, time_window: timedelta) -> None:
         """Initialize rate limiter.
 
         Args:

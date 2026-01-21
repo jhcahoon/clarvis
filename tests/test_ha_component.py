@@ -9,6 +9,7 @@ libraries, since HA is not available in the development environment.
 
 import ast
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -90,15 +91,77 @@ class TestConstants:
         assert isinstance(ha_keywords, list)
         assert len(ha_keywords) > 0
 
-    def test_default_api_host(self):
-        """Verify DEFAULT_API_HOST is correct."""
-        const = load_const_module()
-        assert const["DEFAULT_API_HOST"] == "10.0.0.23"
+    def test_default_api_host_defaults_to_localhost(self):
+        """Verify DEFAULT_API_HOST defaults to localhost when env var not set."""
+        original = os.environ.pop("CLARVIS_API_HOST", None)
+        try:
+            const = load_const_module()
+            assert const["DEFAULT_API_HOST"] == "localhost"
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_HOST"] = original
 
-    def test_default_api_port(self):
-        """Verify DEFAULT_API_PORT is correct."""
-        const = load_const_module()
-        assert const["DEFAULT_API_PORT"] == 8000
+    def test_default_api_host_uses_env_var(self):
+        """Verify DEFAULT_API_HOST uses environment variable when set."""
+        original = os.environ.get("CLARVIS_API_HOST")
+        try:
+            os.environ["CLARVIS_API_HOST"] = "192.168.1.100"
+            const = load_const_module()
+            assert const["DEFAULT_API_HOST"] == "192.168.1.100"
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_HOST"] = original
+            else:
+                os.environ.pop("CLARVIS_API_HOST", None)
+
+    def test_default_api_port_defaults_to_8000(self):
+        """Verify DEFAULT_API_PORT defaults to 8000 when env var not set."""
+        original = os.environ.pop("CLARVIS_API_PORT", None)
+        try:
+            const = load_const_module()
+            assert const["DEFAULT_API_PORT"] == 8000
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_PORT"] = original
+
+    def test_default_api_port_uses_env_var(self):
+        """Verify DEFAULT_API_PORT uses environment variable when set."""
+        original = os.environ.get("CLARVIS_API_PORT")
+        try:
+            os.environ["CLARVIS_API_PORT"] = "9000"
+            const = load_const_module()
+            assert const["DEFAULT_API_PORT"] == 9000
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_PORT"] = original
+            else:
+                os.environ.pop("CLARVIS_API_PORT", None)
+
+    def test_default_api_port_invalid_falls_back_to_default(self):
+        """Verify DEFAULT_API_PORT falls back to 8000 for invalid values."""
+        original = os.environ.get("CLARVIS_API_PORT")
+        try:
+            os.environ["CLARVIS_API_PORT"] = "not_a_number"
+            const = load_const_module()
+            assert const["DEFAULT_API_PORT"] == 8000
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_PORT"] = original
+            else:
+                os.environ.pop("CLARVIS_API_PORT", None)
+
+    def test_default_api_port_out_of_range_falls_back_to_default(self):
+        """Verify DEFAULT_API_PORT falls back to 8000 for out-of-range values."""
+        original = os.environ.get("CLARVIS_API_PORT")
+        try:
+            os.environ["CLARVIS_API_PORT"] = "99999"
+            const = load_const_module()
+            assert const["DEFAULT_API_PORT"] == 8000
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_PORT"] = original
+            else:
+                os.environ.pop("CLARVIS_API_PORT", None)
 
     def test_default_timeout(self):
         """Verify DEFAULT_TIMEOUT is reasonable."""
@@ -279,11 +342,13 @@ class TestConversationAgent:
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
         ]
 
-        # Updated required methods for orchestrator integration
+        # Required methods for orchestrator integration with streaming support
         required_methods = [
             "__init__",
-            "async_process",
+            "_async_handle_message",  # Streaming entry point (HA 2025.7+)
+            "_async_process_fallback",  # Non-streaming fallback
             "_is_ha_command",
+            "_stream_from_api",  # SSE streaming from API
             "_handle_orchestrator_query",
             "_process_orchestrator_response",
             "_build_response",
@@ -585,9 +650,10 @@ class TestComponentFileStructure:
 class TestIntegration:
     """Integration tests for Clarvis component with live API."""
 
-    # Constants from const.py (duplicated here to avoid HA import issues)
-    API_HOST = "10.0.0.23"
-    API_PORT = 8000
+    # API configuration - uses environment variable or localhost
+    # Set CLARVIS_API_HOST and CLARVIS_API_PORT for testing against a real instance
+    API_HOST = os.environ.get("CLARVIS_API_HOST", "localhost")
+    API_PORT = int(os.environ.get("CLARVIS_API_PORT", "8000"))
     HEALTH_ENDPOINT = "/health"
     ORCHESTRATOR_QUERY_ENDPOINT = "/api/v1/query"
 
