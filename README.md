@@ -1,10 +1,13 @@
 # Clarvis
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+
 AI Home Assistant powered by Claude agents, integrating with Home Assistant for voice-controlled automation.
 
 ## Overview
 
-Clarvis uses Claude-powered agents with MCP (Model Context Protocol) servers to provide intelligent email access and other home automation capabilities. The system is designed to run on a Windows host (MINISFORUM UN100P with Windows 11 Pro) hosting Home Assistant OS via Hyper-V.
+Clarvis uses Claude-powered agents with MCP (Model Context Protocol) servers to provide intelligent email access and other home automation capabilities. The system is designed to run on a Windows host with Home Assistant OS via Hyper-V.
 
 ## Quick Start
 
@@ -180,6 +183,12 @@ black clarvis_agents/
 mypy clarvis_agents/
 ```
 
+## Support
+
+- **Issues & Bugs**: [GitHub Issues](https://github.com/jhcahoon/clarvis/issues)
+- **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Security**: See [SECURITY.md](SECURITY.md)
+
 ## License
 
-MIT
+MIT - See [LICENSE](LICENSE) for details.

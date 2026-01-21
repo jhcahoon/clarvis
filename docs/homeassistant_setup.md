@@ -9,7 +9,7 @@ This document describes how to configure network connectivity between Home Assis
 │  Home Assistant OS          │  ─────────────────────►  │  Windows Host               │
 │  (Hyper-V VM)               │                          │  Clarvis API Server         │
 │                             │  ◄─────────────────────  │  (FastAPI + GmailAgent)     │
-│  IP: Assigned by DHCP       │     JSON Response        │  IP: 10.0.0.23              │
+│  IP: Assigned by DHCP       │     JSON Response        │  IP: <YOUR_HOST_IP>              │
 └─────────────────────────────┘                          └─────────────────────────────┘
            │                                                        │
            └────────────── Home Assistant Bridge ───────────────────┘
@@ -21,7 +21,7 @@ This document describes how to configure network connectivity between Home Assis
 ### Host IP Address
 
 The Windows host IP on the Home Assistant Bridge virtual switch:
-- **IP Address:** `10.0.0.23`
+- **IP Address:** `<YOUR_HOST_IP>`
 - **Port:** `8000`
 
 To verify the host IP:
@@ -75,7 +75,7 @@ Access the HA console via Hyper-V Manager: Right-click VM → Connect
 ### Health Check
 
 ```bash
-curl http://10.0.0.23:8000/health
+curl http://<YOUR_HOST_IP>:8000/health
 ```
 
 Expected response:
@@ -86,7 +86,7 @@ Expected response:
 ### Gmail Query Test
 
 ```bash
-curl -X POST http://10.0.0.23:8000/api/v1/gmail/query \
+curl -X POST http://<YOUR_HOST_IP>:8000/api/v1/gmail/query \
      -H "Content-Type: application/json" \
      -d '{"query": "how many unread emails do I have"}'
 ```
@@ -121,7 +121,7 @@ Expected response:
 
 3. **Verify both HA VM and Windows host are on the same subnet:**
    - HA VM should get an IP in the `10.0.0.x` range
-   - Windows host is at `10.0.0.23`
+   - Windows host is at `<YOUR_HOST_IP>`
 
 4. **Check Hyper-V virtual switch configuration:**
    ```powershell

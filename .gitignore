@@ -52,3 +52,9 @@ claude_learnings.md
 # Local config files (platform-specific)
 configs/mcp_servers.local.json
 configs/*.local.json
+
+# Exploratory/development scripts (may contain personal paths)
+scripts/exploratory/
+
+# Local documentation with implementation-specific details
+docs/*.local.md

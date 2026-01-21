@@ -1,6 +1,6 @@
 # AI Home Assistant - Technical Architecture
 
-**Last Updated:** January 20, 2026 (v2.14)
+**Last Updated:** January 21, 2026 (v2.15)
 
 ---
 
@@ -24,8 +24,8 @@
 │                        Home Network                              │
 │                                                                  │
 │  ┌──────────────────────────────────────────┐                   │
-│  │     MINISFORUM UN100P (Windows 11 Pro)   │                   │
-│  │                                          │                   │
+│  │     Host Machine (Windows 11 Pro)        │                   │
+│  │     (Mini PC or similar recommended)     │                   │
 │  │  ┌────────────────────────────────────┐  │                   │
 │  │  │   Hyper-V VM: Home Assistant OS    │  │                   │
 │  │  │   - Supervisor                     │  │                   │
@@ -35,7 +35,7 @@
 │  │                 │ HTTP :8000             │                   │
 │  │                 ▼                        │                   │
 │  │  ┌────────────────────────────────────┐  │                   │
-│  │  │   Windows Host (10.0.0.23)         │  │                   │
+│  │  │   Windows Host (<YOUR_HOST_IP>)    │  │                   │
 │  │  │   - Clarvis API Server (FastAPI)   │  │                   │
 │  │  │   - Gmail Agent + MCP Server       │  │                   │
 │  │  │   - Development environment        │  │                   │
@@ -65,15 +65,17 @@
 
 ## Local Infrastructure
 
-### Host Machine: MINISFORUM UN100P
+### Host Machine Requirements
 
-| Spec | Value |
-|------|-------|
-| CPU | Intel N100 (4 cores, 4 threads, up to 3.4GHz) |
-| RAM | 16 GB DDR4 |
-| Storage | 256 GB NVMe SSD |
-| OS | Windows 11 Pro |
-| Network | Gigabit Ethernet + Wi-Fi 6 |
+| Spec | Recommended |
+|------|-------------|
+| CPU | Intel N100 or better (4+ cores) |
+| RAM | 8-16 GB DDR4 |
+| Storage | 128+ GB SSD |
+| OS | Windows 11 Pro (for Hyper-V support) |
+| Network | Ethernet recommended (Wi-Fi supported) |
+
+> **Note:** Low-power mini PCs (e.g., Intel N100-based systems) work well for this use case, providing quiet 24/7 operation with minimal power consumption.
 
 **Responsibilities:**
 - Host Hyper-V hypervisor
@@ -496,7 +498,7 @@ Internet
     ┌─────────┐   ┌──────────┐   ┌──────────┐
     │ Windows │   │   HAOS   │   │ Voice PE │
     │  Host   │   │    VM    │   │          │
-    │10.0.0.23│   │  (DHCP)  │   │  (DHCP)  │
+    │<YOUR_HOST_IP>│   │  (DHCP)  │   │  (DHCP)  │
     │ :8000   │   │  :8123   │   │          │
     └─────────┘   └──────────┘   └──────────┘
          ▲              │
@@ -549,7 +551,7 @@ New-NetFirewallRule -DisplayName 'Clarvis API Server' `
 ### DNS/Discovery
 
 - **mDNS:** Home Assistant advertises as `homeassistant.local`
-- **Windows Host:** Access via IP `10.0.0.23` (mDNS not available)
+- **Windows Host:** Access via IP `<YOUR_HOST_IP>` (mDNS not available)
 - **Fallback:** Use direct IP if mDNS doesn't resolve
 - **Voice PE Discovery:** Auto-discovered via Zeroconf/mDNS
 
@@ -664,7 +666,7 @@ response = agent.check_emails("How many unread emails do I have?")
 
 **API Access:**
 ```bash
-curl -X POST http://10.0.0.23:8000/api/v1/gmail/query \
+curl -X POST http://<YOUR_HOST_IP>:8000/api/v1/gmail/query \
      -H "Content-Type: application/json" \
      -d '{"query": "check my unread emails"}'
 ```
@@ -700,7 +702,7 @@ response = agent.get_conditions("What's the ski report at Meadows?")
 
 **API Access:**
 ```bash
-curl -X POST http://10.0.0.23:8000/api/v1/query \
+curl -X POST http://<YOUR_HOST_IP>:8000/api/v1/query \
      -H "Content-Type: application/json" \
      -d '{"query": "what is the ski report at meadows"}'
 ```
@@ -743,7 +745,7 @@ response = agent.handle_query("Add milk to my grocery list")
 
 **API Access:**
 ```bash
-curl -X POST http://10.0.0.23:8000/api/v1/query \
+curl -X POST http://<YOUR_HOST_IP>:8000/api/v1/query \
      -H "Content-Type: application/json" \
      -d '{"query": "add milk to my grocery list"}'
 ```
@@ -873,7 +875,7 @@ Agents can also use native Python tools via `create_sdk_mcp_server()` for simple
 ### Phase 2: Network Configuration (✅ Complete - Issue #5)
 
 - [x] Create Windows Firewall rule (port 8000, Private+Public profiles)
-- [x] Identify Windows host IP on Home Assistant Bridge (10.0.0.23)
+- [x] Identify Windows host IP on Home Assistant Bridge (<YOUR_HOST_IP>)
 - [x] Test API connectivity from HA VM
 - [x] Create network setup documentation (`docs/homeassistant_setup.md`)
 - [x] Add network configuration tests (`tests/test_network_config.py`)
@@ -995,3 +997,4 @@ See `evals/README.md` for detailed documentation.
 | 2026-01-16 | 2.12 | Refactored Ski Agent to use native SDK tools instead of external mcp-server-fetch; New `clarvis_agents/ski_agent/tools.py` with httpx-based fetch; Faster startup, no subprocess overhead; Added comprehensive tests for native tools |
 | 2026-01-19 | 2.13 | Added detailed agent architecture documentation (`docs/agent_architecture.md`) with ASCII diagrams showing multi-agent orchestration pattern, core abstractions, routing flow, and how to add new agents |
 | 2026-01-20 | 2.14 | Added Promptfoo evaluation framework (Issue #39); New `evals/` directory with 65 routing tests; Added Makefile with eval targets; 100% pass rate on routing, edge case, and follow-up tests |
+| 2026-01-21 | 2.15 | Public release preparation: Removed hardcoded IPs (replaced with `<YOUR_HOST_IP>` placeholders); Made API host configurable via CLARVIS_API_HOST env var; Removed exploratory scripts from git; Added LICENSE, CONTRIBUTING.md, SECURITY.md; Enhanced .env.example with documentation; Added type hints to __init__ methods |

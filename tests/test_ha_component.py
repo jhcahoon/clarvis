@@ -9,6 +9,7 @@ libraries, since HA is not available in the development environment.
 
 import ast
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -91,9 +92,13 @@ class TestConstants:
         assert len(ha_keywords) > 0
 
     def test_default_api_host(self):
-        """Verify DEFAULT_API_HOST is correct."""
+        """Verify DEFAULT_API_HOST defaults to localhost (configurable via env var)."""
         const = load_const_module()
-        assert const["DEFAULT_API_HOST"] == "10.0.0.23"
+        # Default is localhost; can be overridden via CLARVIS_API_HOST env var
+        # In test environment, expect localhost unless env var is set
+        import os
+        expected = os.environ.get("CLARVIS_API_HOST", "localhost")
+        assert const["DEFAULT_API_HOST"] == expected
 
     def test_default_api_port(self):
         """Verify DEFAULT_API_PORT is correct."""
@@ -279,11 +284,13 @@ class TestConversationAgent:
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
         ]
 
-        # Updated required methods for orchestrator integration
+        # Required methods for orchestrator integration with streaming support
         required_methods = [
             "__init__",
-            "async_process",
+            "_async_handle_message",  # Streaming entry point (HA 2025.7+)
+            "_async_process_fallback",  # Non-streaming fallback
             "_is_ha_command",
+            "_stream_from_api",  # SSE streaming from API
             "_handle_orchestrator_query",
             "_process_orchestrator_response",
             "_build_response",
@@ -585,9 +592,10 @@ class TestComponentFileStructure:
 class TestIntegration:
     """Integration tests for Clarvis component with live API."""
 
-    # Constants from const.py (duplicated here to avoid HA import issues)
-    API_HOST = "10.0.0.23"
-    API_PORT = 8000
+    # API configuration - uses environment variable or localhost
+    # Set CLARVIS_API_HOST and CLARVIS_API_PORT for testing against a real instance
+    API_HOST = os.environ.get("CLARVIS_API_HOST", "localhost")
+    API_PORT = int(os.environ.get("CLARVIS_API_PORT", "8000"))
     HEALTH_ENDPOINT = "/health"
     ORCHESTRATOR_QUERY_ENDPOINT = "/api/v1/query"
 

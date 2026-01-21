@@ -78,7 +78,7 @@ ha core logs | grep -i clarvis
 ---
 
 ### Step 5: Verify API Server is Running
-- [ ] Check if API server is running on Windows host (10.0.0.23:8000)
+- [ ] Check if API server is running on Windows host (<YOUR_HOST_IP>:8000)
 
 **On Windows host, run:**
 ```powershell
@@ -109,7 +109,7 @@ curl http://localhost:8000/health
 
 **Via HA Console:**
 ```bash
-curl http://10.0.0.23:8000/health
+curl http://<YOUR_HOST_IP>:8000/health
 ```
 
 **If fails, check Windows Firewall:**
@@ -130,7 +130,7 @@ Get-NetFirewallRule -DisplayName 'Clarvis API Server' | Select-Object Enabled, P
 - [ ] Search for: "Clarvis"
 
 **If found, configure with:**
-- API Host: `10.0.0.23`
+- API Host: `<YOUR_HOST_IP>`
 - API Port: `8000`
 
 **Result:**
