@@ -1,0 +1,246 @@
+# Orchestrator Routing Evaluation
+# Tests core routing functionality for Gmail, Ski, Notes agents and direct handling
+
+description: "Orchestrator routing evaluation - core agent routing tests"
+
+providers:
+  - id: "file://provider.py"
+    label: "Router (code-only)"
+
+prompts:
+  - "{{query}}"
+
+tests:
+  # ============================================================================
+  # Gmail Agent Routing
+  # ============================================================================
+
+  - description: "Gmail: unread emails query"
+    vars:
+      query: "Do I have any unread emails?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+      - type: javascript
+        value: "JSON.parse(output).confidence >= 0.7"
+
+  - description: "Gmail: check inbox"
+    vars:
+      query: "Check my inbox"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Gmail: search emails by sender"
+    vars:
+      query: "Show me emails from John"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Gmail: email about specific topic"
+    vars:
+      query: "Find emails about the project deadline"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Gmail: read mail"
+    vars:
+      query: "Read my mail"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Gmail: unread messages"
+    vars:
+      query: "How many unread messages do I have?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Gmail: gmail specific"
+    vars:
+      query: "Check my gmail"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Gmail: emails from today"
+    vars:
+      query: "What emails did I get today?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  # ============================================================================
+  # Ski Agent Routing
+  # ============================================================================
+
+  - description: "Ski: snow conditions at Meadows"
+    vars:
+      query: "What are the snow conditions at Meadows?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+      - type: javascript
+        value: "JSON.parse(output).confidence >= 0.7"
+
+  - description: "Ski: ski report"
+    vars:
+      query: "What's the ski report?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Ski: powder conditions"
+    vars:
+      query: "How's the powder at Hood?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Ski: lift status"
+    vars:
+      query: "Are the lifts running?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Ski: mountain conditions"
+    vars:
+      query: "Mountain conditions today"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Ski: snow depth"
+    vars:
+      query: "How much snow is there?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Ski: slopes open"
+    vars:
+      query: "Are the slopes open?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Ski: skiing conditions"
+    vars:
+      query: "Is skiing good today?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  # ============================================================================
+  # Notes Agent Routing
+  # ============================================================================
+
+  - description: "Notes: add to grocery list"
+    vars:
+      query: "Add milk to my grocery list"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+      - type: javascript
+        value: "JSON.parse(output).confidence >= 0.7"
+
+  - description: "Notes: what's on list"
+    vars:
+      query: "What's on my grocery list?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  - description: "Notes: remind me"
+    vars:
+      query: "Remind me to call the dentist"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  - description: "Notes: take a note"
+    vars:
+      query: "Take a note: the garage code is 1234"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  - description: "Notes: shopping list"
+    vars:
+      query: "Put bread on my shopping list"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  - description: "Notes: show my notes"
+    vars:
+      query: "What notes do I have?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  - description: "Notes: my reminders"
+    vars:
+      query: "Show me my reminders"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  - description: "Notes: todo list"
+    vars:
+      query: "Add buy gift to my todo list"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  # ============================================================================
+  # Direct Handling (Greetings & Thanks)
+  # ============================================================================
+
+  - description: "Direct: hello greeting"
+    vars:
+      query: "Hello"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true"
+      - type: javascript
+        value: "JSON.parse(output).confidence === 1.0"
+
+  - description: "Direct: hi greeting"
+    vars:
+      query: "Hi"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true"
+
+  - description: "Direct: hey greeting"
+    vars:
+      query: "Hey there"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true"
+
+  - description: "Direct: thanks"
+    vars:
+      query: "Thanks!"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true"
+
+  - description: "Direct: thank you"
+    vars:
+      query: "Thank you"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true"
+
+  - description: "Direct: good morning greeting"
+    vars:
+      query: "Good morning"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true"

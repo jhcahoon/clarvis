@@ -1,14 +1,14 @@
 """Configuration for Ski Agent."""
 
+import threading
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 
 class RateLimiter:
-    """Rate limiter using sliding window algorithm."""
+    """Thread-safe rate limiter using sliding window algorithm."""
 
     def __init__(self, max_calls: int, time_window: timedelta):
         """Initialize rate limiter.
@@ -20,26 +20,28 @@ class RateLimiter:
         self.max_calls = max_calls
         self.time_window = time_window
         self.calls: deque[datetime] = deque()
+        self._lock = threading.Lock()
 
     def check_rate_limit(self) -> bool:
-        """Check if we're within rate limit.
+        """Check if we're within rate limit (thread-safe).
 
         Returns:
             True if within rate limit, False otherwise
         """
         now = datetime.now()
 
-        # Remove old calls outside the time window
-        while self.calls and self.calls[0] < now - self.time_window:
-            self.calls.popleft()
+        with self._lock:
+            # Remove old calls outside the time window
+            while self.calls and self.calls[0] < now - self.time_window:
+                self.calls.popleft()
 
-        # Check if we've exceeded the limit
-        if len(self.calls) >= self.max_calls:
-            return False
+            # Check if we've exceeded the limit
+            if len(self.calls) >= self.max_calls:
+                return False
 
-        # Record this call
-        self.calls.append(now)
-        return True
+            # Record this call
+            self.calls.append(now)
+            return True
 
 
 @dataclass
@@ -85,20 +87,3 @@ class SkiAgentConfig:
         """Ensure paths are Path objects."""
         if not isinstance(self.log_dir, Path):
             self.log_dir = Path(self.log_dir)
-
-    def get_mcp_config(self) -> dict[str, Any]:
-        """Returns MCP server configuration dictionary.
-
-        Uses mcp-server-fetch for web requests.
-
-        Returns:
-            Dictionary with MCP server configuration
-        """
-        return {
-            "fetch": {
-                "type": "stdio",
-                "command": "uvx",
-                "args": ["mcp-server-fetch"],
-                "env": {},
-            }
-        }

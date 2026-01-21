@@ -11,6 +11,7 @@ from ..core import AgentCapability, AgentResponse, BaseAgent
 from ..core.context import ConversationContext
 from .config import CachedConditions, RateLimiter, SkiAgentConfig
 from .prompts import SYSTEM_PROMPT
+from .tools import ski_tools_server
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -128,23 +129,9 @@ class SkiAgent(BaseAgent):
             prompt = self._build_conditions_prompt(query_text)
 
             async for message in query(prompt=prompt, options=options):
-                # Extract text from different message types and yield immediately
-                if hasattr(message, "result"):
-                    text = str(message.result)
-                    if text:
-                        yield text
-                elif hasattr(message, "text"):
-                    text = str(message.text)
-                    if text:
-                        yield text
-                elif hasattr(message, "content"):
-                    if isinstance(message.content, str):
-                        if message.content:
-                            yield message.content
-                    elif isinstance(message.content, list):
-                        for block in message.content:
-                            if hasattr(block, "text") and block.text:
-                                yield block.text
+                text = self._extract_text_from_message(message)
+                if text:
+                    yield text
 
             logger.info("Ski conditions query streaming completed")
 
@@ -167,26 +154,17 @@ class SkiAgent(BaseAgent):
         logger.info("Ski Agent logging initialized")
 
     def _build_agent_options(self) -> ClaudeAgentOptions:
-        """Build ClaudeAgentOptions with MCP servers and settings.
+        """Build ClaudeAgentOptions with native tools.
 
         Returns:
             Configured ClaudeAgentOptions for the query
         """
-        mcp_config = self.config.get_mcp_config()["fetch"]
-
         options = ClaudeAgentOptions(
             system_prompt=SYSTEM_PROMPT,
-            mcp_servers={
-                "fetch": {
-                    "type": mcp_config["type"],
-                    "command": mcp_config["command"],
-                    "args": mcp_config["args"],
-                    "env": mcp_config.get("env", {}),
-                },
-            },
+            mcp_servers={"ski_tools": ski_tools_server},
             model=self.config.model,
             max_turns=self.config.max_turns,
-            # Skip permission checks for MCP tools
+            # Skip permission checks for native tools
             extra_args={"dangerously-skip-permissions": None},
         )
 
@@ -201,11 +179,36 @@ class SkiAgent(BaseAgent):
         Returns:
             Prompt string for the agent
         """
-        return f"""Please fetch the current ski conditions from {self.config.meadows_url} and answer the following question:
+        return f"""Use the fetch_ski_conditions tool to get the current conditions, then answer:
 
-{user_query}
+{user_query}"""
 
-Use the fetch tool to get the conditions data, then provide a natural, voice-friendly response."""
+    def _extract_text_from_message(self, message: object) -> str:
+        """Extract text content from a Claude SDK message.
+
+        Handles various message types returned by the SDK including
+        result objects, text objects, and content blocks.
+
+        Args:
+            message: A message object from the Claude SDK query stream.
+
+        Returns:
+            Extracted text content, or empty string if no text found.
+        """
+        if hasattr(message, "result"):
+            return str(message.result)
+        elif hasattr(message, "text"):
+            return str(message.text)
+        elif hasattr(message, "content"):
+            if isinstance(message.content, str):
+                return message.content
+            elif isinstance(message.content, list):
+                parts = []
+                for block in message.content:
+                    if hasattr(block, "text") and block.text:
+                        parts.append(block.text)
+                return "".join(parts)
+        return ""
 
     async def _get_conditions(self, query_text: str) -> str:
         """Get ski conditions for a query.
@@ -229,17 +232,7 @@ Use the fetch tool to get the conditions data, then provide a natural, voice-fri
             # Stream response from Claude Agent SDK
             response_text = ""
             async for message in query(prompt=prompt, options=options):
-                if hasattr(message, "result"):
-                    response_text += str(message.result)
-                elif hasattr(message, "text"):
-                    response_text += str(message.text)
-                elif hasattr(message, "content"):
-                    if isinstance(message.content, str):
-                        response_text += message.content
-                    elif isinstance(message.content, list):
-                        for block in message.content:
-                            if hasattr(block, "text"):
-                                response_text += block.text
+                response_text += self._extract_text_from_message(message)
 
             if not response_text:
                 response_text = (

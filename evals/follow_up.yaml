@@ -1,0 +1,160 @@
+# Follow-up Detection Tests
+# Tests multi-turn conversation context and follow-up phrase detection
+
+description: "Follow-up detection tests with conversation context"
+
+providers:
+  - id: "file://provider.py"
+    label: "Router with context"
+
+prompts:
+  - "{{query}}"
+
+tests:
+  # ============================================================================
+  # Follow-up Phrase Detection (starts with follow-up phrase)
+  # ============================================================================
+
+  - description: "Follow-up: 'what about' triggers continuation with ski"
+    vars:
+      query: "What about tomorrow?"
+      context: '{"last_agent": "ski", "turns": [{"query": "ski conditions today", "agent_used": "ski", "response": "12 inches of fresh powder"}]}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+      - type: javascript
+        value: "JSON.parse(output).reasoning.toLowerCase().includes('follow')"
+
+  - description: "Follow-up: 'and also' triggers continuation with ski"
+    vars:
+      query: "And also the lift status?"
+      context: '{"last_agent": "ski", "turns": [{"query": "snow conditions", "agent_used": "ski", "response": "Good conditions"}]}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Follow-up: 'tell me more' continues with gmail"
+    vars:
+      query: "Tell me more about that"
+      context: '{"last_agent": "gmail", "turns": [{"query": "check my inbox", "agent_used": "gmail", "response": "You have 3 unread emails from John"}]}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Follow-up: 'what else' continues with notes"
+    vars:
+      query: "What else is on there?"
+      context: '{"last_agent": "notes", "turns": [{"query": "whats on my grocery list", "agent_used": "notes", "response": "Milk and eggs"}]}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  # ============================================================================
+  # Short Queries with Pronouns
+  # ============================================================================
+
+  - description: "Pronoun: 'show them' continues with gmail"
+    vars:
+      query: "Show them"
+      context: '{"last_agent": "gmail", "turns": [{"query": "check my inbox", "agent_used": "gmail", "response": "You have 3 unread emails"}]}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Pronoun: 'read it' continues with gmail"
+    vars:
+      query: "Read it"
+      context: '{"last_agent": "gmail", "turns": [{"query": "any new emails", "agent_used": "gmail", "response": "You have one new email from Sarah"}]}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Pronoun: 'delete that' continues with notes"
+    vars:
+      query: "Delete that"
+      context: '{"last_agent": "notes", "turns": [{"query": "show my reminders", "agent_used": "notes", "response": "You have a reminder to call the dentist"}]}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  # ============================================================================
+  # No Context - Should Route Based on Content
+  # ============================================================================
+
+  - description: "No context: 'what about tomorrow' routes to handle directly (ambiguous)"
+    vars:
+      query: "What about tomorrow?"
+      context: '{}'
+    assert:
+      # Without context, this is ambiguous and should handle directly or pick based on content
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true || JSON.parse(output).agent_name !== null"
+
+  - description: "No context: 'tell me more' handles directly (no referent)"
+    vars:
+      query: "Tell me more"
+      context: '{}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true || JSON.parse(output).agent_name === null"
+
+  - description: "No context: pronoun 'it' handles directly"
+    vars:
+      query: "Read it"
+      context: '{}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true || JSON.parse(output).agent_name === null"
+
+  # ============================================================================
+  # Clear New Topic Overrides Context
+  # ============================================================================
+
+  - description: "New topic: explicit ski query despite gmail context"
+    vars:
+      query: "What are the ski conditions at Meadows?"
+      context: '{"last_agent": "gmail", "turns": [{"query": "check my inbox", "agent_used": "gmail", "response": "You have mail"}]}'
+    assert:
+      # Clear ski query should route to ski, not follow gmail
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "New topic: explicit email query despite ski context"
+    vars:
+      query: "Do I have any unread emails?"
+      context: '{"last_agent": "ski", "turns": [{"query": "snow conditions", "agent_used": "ski", "response": "Conditions are good"}]}'
+    assert:
+      # Clear email query should route to gmail, not follow ski
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "New topic: explicit notes query despite gmail context"
+    vars:
+      query: "Add milk to my grocery list"
+      context: '{"last_agent": "gmail", "turns": [{"query": "check inbox", "agent_used": "gmail", "response": "All caught up"}]}'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  # ============================================================================
+  # Context With Follow-up Phrases in Longer Queries
+  # ============================================================================
+
+  - description: "Long query with 'can you' is treated as follow-up (limitation)"
+    vars:
+      query: "Can you check the powder report for this weekend?"
+      context: '{"last_agent": "gmail", "turns": [{"query": "check inbox", "agent_used": "gmail", "response": "Done"}]}'
+    assert:
+      # NOTE: "can you" is a follow-up phrase, so context wins despite ski content
+      # This is a known limitation - follow-up detection happens before content routing
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Long query without follow-up phrase routes to ski"
+    vars:
+      query: "Check the powder report for this weekend please"
+      context: '{"last_agent": "gmail", "turns": [{"query": "check inbox", "agent_used": "gmail", "response": "Done"}]}'
+    assert:
+      # No follow-up phrase, so content routing applies -> ski
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"

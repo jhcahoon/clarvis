@@ -36,15 +36,14 @@ class TestSkiAgentConfig:
         assert config.cache_ttl_minutes == 30
         assert config.max_requests_per_minute == 10
 
-    def test_config_mcp_config(self):
-        """Test MCP configuration generation."""
+    def test_config_meadows_url(self):
+        """Test meadows URL configuration."""
         config = SkiAgentConfig()
-        mcp_config = config.get_mcp_config()
+        assert config.meadows_url == "https://cloudserv.skihood.com/"
 
-        assert "fetch" in mcp_config
-        assert mcp_config["fetch"]["type"] == "stdio"
-        assert mcp_config["fetch"]["command"] == "uvx"
-        assert "mcp-server-fetch" in mcp_config["fetch"]["args"]
+        custom_url = "https://example.com/conditions"
+        config_custom = SkiAgentConfig(meadows_url=custom_url)
+        assert config_custom.meadows_url == custom_url
 
     def test_config_log_dir_is_path(self):
         """Test that log_dir is a Path object."""
