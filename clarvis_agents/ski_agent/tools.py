@@ -11,18 +11,25 @@ logger = logging.getLogger(__name__)
 # Default URL for Mt Hood Meadows conditions
 DEFAULT_CONDITIONS_URL = "https://cloudserv.skihood.com/"
 
-# Module-level configuration
+# Module-level default URL. Use set_conditions_url() to override for testing.
+# Note: This is module-level state. For production use, pass URL via tool parameter.
 _conditions_url: str = DEFAULT_CONDITIONS_URL
 
 
 def set_conditions_url(url: str) -> None:
-    """Set the conditions URL (for testing or custom configuration)."""
+    """Set the default conditions URL (primarily for testing).
+
+    Note: Prefer passing the URL directly to fetch_ski_conditions() when possible.
+
+    Args:
+        url: The URL to use as the default for fetching conditions.
+    """
     global _conditions_url
     _conditions_url = url
 
 
 def get_conditions_url() -> str:
-    """Get the current conditions URL."""
+    """Get the current default conditions URL."""
     return _conditions_url
 
 
@@ -65,11 +72,11 @@ async def fetch_ski_conditions_impl(url: Optional[str] = None) -> str:
 
     except httpx.RequestError as e:
         logger.error(f"Request error fetching conditions: {e}")
-        return f"Error: Unable to connect to ski conditions server. {str(e)}"
+        return "Error: Unable to connect to ski conditions server. Please try again later."
 
     except Exception as e:
         logger.error(f"Unexpected error fetching conditions: {e}", exc_info=True)
-        return f"Error: Unexpected error fetching conditions. {str(e)}"
+        return "Error: An unexpected error occurred while fetching conditions. Please try again later."
 
 
 # SDK Tool definitions
