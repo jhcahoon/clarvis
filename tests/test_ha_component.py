@@ -91,19 +91,77 @@ class TestConstants:
         assert isinstance(ha_keywords, list)
         assert len(ha_keywords) > 0
 
-    def test_default_api_host(self):
-        """Verify DEFAULT_API_HOST defaults to localhost (configurable via env var)."""
-        const = load_const_module()
-        # Default is localhost; can be overridden via CLARVIS_API_HOST env var
-        # In test environment, expect localhost unless env var is set
-        import os
-        expected = os.environ.get("CLARVIS_API_HOST", "localhost")
-        assert const["DEFAULT_API_HOST"] == expected
+    def test_default_api_host_defaults_to_localhost(self):
+        """Verify DEFAULT_API_HOST defaults to localhost when env var not set."""
+        original = os.environ.pop("CLARVIS_API_HOST", None)
+        try:
+            const = load_const_module()
+            assert const["DEFAULT_API_HOST"] == "localhost"
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_HOST"] = original
 
-    def test_default_api_port(self):
-        """Verify DEFAULT_API_PORT is correct."""
-        const = load_const_module()
-        assert const["DEFAULT_API_PORT"] == 8000
+    def test_default_api_host_uses_env_var(self):
+        """Verify DEFAULT_API_HOST uses environment variable when set."""
+        original = os.environ.get("CLARVIS_API_HOST")
+        try:
+            os.environ["CLARVIS_API_HOST"] = "192.168.1.100"
+            const = load_const_module()
+            assert const["DEFAULT_API_HOST"] == "192.168.1.100"
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_HOST"] = original
+            else:
+                os.environ.pop("CLARVIS_API_HOST", None)
+
+    def test_default_api_port_defaults_to_8000(self):
+        """Verify DEFAULT_API_PORT defaults to 8000 when env var not set."""
+        original = os.environ.pop("CLARVIS_API_PORT", None)
+        try:
+            const = load_const_module()
+            assert const["DEFAULT_API_PORT"] == 8000
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_PORT"] = original
+
+    def test_default_api_port_uses_env_var(self):
+        """Verify DEFAULT_API_PORT uses environment variable when set."""
+        original = os.environ.get("CLARVIS_API_PORT")
+        try:
+            os.environ["CLARVIS_API_PORT"] = "9000"
+            const = load_const_module()
+            assert const["DEFAULT_API_PORT"] == 9000
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_PORT"] = original
+            else:
+                os.environ.pop("CLARVIS_API_PORT", None)
+
+    def test_default_api_port_invalid_falls_back_to_default(self):
+        """Verify DEFAULT_API_PORT falls back to 8000 for invalid values."""
+        original = os.environ.get("CLARVIS_API_PORT")
+        try:
+            os.environ["CLARVIS_API_PORT"] = "not_a_number"
+            const = load_const_module()
+            assert const["DEFAULT_API_PORT"] == 8000
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_PORT"] = original
+            else:
+                os.environ.pop("CLARVIS_API_PORT", None)
+
+    def test_default_api_port_out_of_range_falls_back_to_default(self):
+        """Verify DEFAULT_API_PORT falls back to 8000 for out-of-range values."""
+        original = os.environ.get("CLARVIS_API_PORT")
+        try:
+            os.environ["CLARVIS_API_PORT"] = "99999"
+            const = load_const_module()
+            assert const["DEFAULT_API_PORT"] == 8000
+        finally:
+            if original is not None:
+                os.environ["CLARVIS_API_PORT"] = original
+            else:
+                os.environ.pop("CLARVIS_API_PORT", None)
 
     def test_default_timeout(self):
         """Verify DEFAULT_TIMEOUT is reasonable."""
