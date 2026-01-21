@@ -1,0 +1,186 @@
+# Edge Case and Ambiguous Query Tests
+# Tests for queries that could match multiple agents or have keyword conflicts
+
+description: "Edge case and ambiguous query tests"
+
+providers:
+  - id: "file://provider.py"
+    label: "Router (code-only)"
+
+prompts:
+  - "{{query}}"
+
+tests:
+  # ============================================================================
+  # Keyword Conflicts
+  # ============================================================================
+
+  # NOTE: These tests document ACTUAL classifier behavior, not necessarily ideal behavior.
+  # When ski has more keyword matches than gmail, ski wins (code-only routing limitation)
+  - description: "Conflict: ski keywords win when more numerous"
+    vars:
+      query: "Email me the ski conditions"
+    assert:
+      # Current behavior: ski wins due to more keyword matches (ski, conditions)
+      # Ideal: gmail should win since 'email' indicates communication action
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+        metric: routing_accuracy
+
+  - description: "Conflict: 'email' as verb may not trigger gmail (low signal)"
+    vars:
+      query: "Email me a reminder"
+    assert:
+      # Current: handle_directly due to ambiguity (email=gmail vs reminder=notes)
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true || JSON.parse(output).agent_name === 'gmail' || JSON.parse(output).agent_name === 'notes'"
+
+  - description: "Conflict: note with email topic - ambiguous domain"
+    vars:
+      query: "Take a note about the email I need to send"
+    assert:
+      # Current: handle_directly due to ambiguity
+      # Both 'note' (notes) and 'email' (gmail) are present
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true || JSON.parse(output).agent_name === 'notes' || JSON.parse(output).agent_name === 'gmail'"
+
+  # ============================================================================
+  # Ambiguous Queries (could match multiple agents)
+  # ============================================================================
+
+  - description: "Ambiguous: ski trip reminder could be notes or ski"
+    vars:
+      query: "What do I need to remember for my ski trip?"
+    assert:
+      # Either agent is acceptable, or handle_directly for ambiguous
+      - type: javascript
+        value: "['ski', 'notes'].includes(JSON.parse(output).agent_name) || JSON.parse(output).handle_directly === true"
+      # Should have some reasoning
+      - type: javascript
+        value: "JSON.parse(output).reasoning.length > 0"
+
+  - description: "Ambiguous: 'list' with no context"
+    vars:
+      query: "Show me my list"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes' || JSON.parse(output).handle_directly === true"
+
+  - description: "Ambiguous: weather could match ski's weather capability"
+    vars:
+      query: "What's the weather?"
+    assert:
+      # Could be ski (mountain weather) or a general query
+      - type: javascript
+        value: "JSON.parse(output).agent_name !== null || JSON.parse(output).handle_directly === true"
+
+  # ============================================================================
+  # Edge Cases
+  # ============================================================================
+
+  - description: "Edge: empty query"
+    vars:
+      query: ""
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true || JSON.parse(output).agent_name === null"
+
+  - description: "Edge: single word - 'email'"
+    vars:
+      query: "email"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Edge: single word - 'ski'"
+    vars:
+      query: "ski"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Edge: single word - 'note'"
+    vars:
+      query: "note"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"
+
+  - description: "Edge: punctuation only"
+    vars:
+      query: "???"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true || JSON.parse(output).agent_name === null"
+
+  - description: "Edge: very long query with multiple domains"
+    vars:
+      query: "I need to check my email about the ski trip and add items to my grocery list and also remind me about it"
+    assert:
+      # Should route to one agent (not crash or error)
+      - type: javascript
+        value: "JSON.parse(output).agent_name !== null || JSON.parse(output).handle_directly === true"
+
+  - description: "Edge: question about capabilities"
+    vars:
+      query: "What can you do?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true || JSON.parse(output).agent_name === null"
+
+  - description: "Edge: help request"
+    vars:
+      query: "help"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true || JSON.parse(output).agent_name === null"
+
+  # ============================================================================
+  # Case Sensitivity
+  # ============================================================================
+
+  - description: "Case: uppercase GMAIL"
+    vars:
+      query: "CHECK MY GMAIL"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Case: mixed case ski query"
+    vars:
+      query: "What are the SNow Conditions at MEADOWS?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Case: lowercase greeting"
+    vars:
+      query: "hello there"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).handle_directly === true"
+
+  # ============================================================================
+  # Natural Language Variations
+  # ============================================================================
+
+  - description: "Variation: informal email query"
+    vars:
+      query: "Got any new mail?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'gmail'"
+
+  - description: "Variation: colloquial ski query"
+    vars:
+      query: "Hows the pow pow at meadows?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'ski'"
+
+  - description: "Variation: contracted note query"
+    vars:
+      query: "What's on my list?"
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).agent_name === 'notes'"

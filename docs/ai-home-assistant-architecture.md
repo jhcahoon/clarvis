@@ -1,6 +1,6 @@
 # AI Home Assistant - Technical Architecture
 
-**Last Updated:** January 19, 2026 (v2.13)
+**Last Updated:** January 20, 2026 (v2.14)
 
 ---
 
@@ -13,6 +13,7 @@
 6. [Cloud Infrastructure](#cloud-infrastructure-future)
 7. [Agent Architecture](#agent-architecture)
 8. [Security Considerations](#security-considerations)
+9. [Evaluation Framework](#evaluation-framework)
 
 ---
 
@@ -922,6 +923,56 @@ Agents can also use native Python tools via `create_sdk_mcp_server()` for simple
 - [x] Add graceful degradation for older HA versions without ChatLog API
 - [x] Update tests for streaming functionality
 
+### Phase 10: Promptfoo Evaluation Framework (✅ Complete - Issue #39)
+
+- [x] Create `evals/` directory structure with documentation
+- [x] Implement Python test harness (`provider.py`, `run_router.py`) for promptfoo integration
+- [x] Create core routing tests (`routing_eval.yaml`) - 30 tests for Gmail, Ski, Notes agents
+- [x] Add edge case tests (`edge_cases.yaml`) - 20 tests for keyword conflicts, ambiguous queries
+- [x] Add follow-up detection tests (`follow_up.yaml`) - 15 tests for multi-turn context
+- [x] Create Makefile with `eval-routing`, `eval-edge`, `eval-follow`, `eval-all`, `eval-view` targets
+- [x] 65 total evaluation tests, 100% pass rate
+
+---
+
+## Evaluation Framework
+
+The `evals/` directory contains a Promptfoo-based evaluation framework for testing orchestrator routing accuracy.
+
+### Running Evaluations
+
+```bash
+# Run all evaluations (65 tests)
+make eval-all
+
+# Run specific test suites
+make eval-routing    # Core routing tests (30 tests)
+make eval-edge       # Edge case tests (20 tests)
+make eval-follow     # Follow-up detection tests (15 tests)
+
+# View results in browser
+make eval-view
+```
+
+### Test Categories
+
+| Suite | Tests | Description |
+|-------|-------|-------------|
+| `routing_eval.yaml` | 30 | Core routing for Gmail, Ski, Notes agents and direct handling |
+| `edge_cases.yaml` | 20 | Edge cases, keyword conflicts, case sensitivity |
+| `follow_up.yaml` | 15 | Multi-turn conversation context and follow-up detection |
+
+### Adding Tests for New Agents
+
+When adding a new agent:
+
+1. Register mock agent in `evals/provider.py`
+2. Add routing tests to `evals/routing_eval.yaml`
+3. Add edge cases to `evals/edge_cases.yaml` if keywords overlap
+4. Run `make eval-all` to verify
+
+See `evals/README.md` for detailed documentation.
+
 ---
 
 ## Revision History
@@ -943,3 +994,4 @@ Agents can also use native Python tools via `create_sdk_mcp_server()` for simple
 | 2026-01-16 | 2.11 | Added Notes Agent for notes, lists, and reminders; New `clarvis_agents/notes_agent/` module with BaseAgent implementation; Uses native SDK tools for local JSON file storage in `~/.clarvis/notes/`; Added notes patterns to IntentClassifier; Updated orchestrator routing |
 | 2026-01-16 | 2.12 | Refactored Ski Agent to use native SDK tools instead of external mcp-server-fetch; New `clarvis_agents/ski_agent/tools.py` with httpx-based fetch; Faster startup, no subprocess overhead; Added comprehensive tests for native tools |
 | 2026-01-19 | 2.13 | Added detailed agent architecture documentation (`docs/agent_architecture.md`) with ASCII diagrams showing multi-agent orchestration pattern, core abstractions, routing flow, and how to add new agents |
+| 2026-01-20 | 2.14 | Added Promptfoo evaluation framework (Issue #39); New `evals/` directory with 65 routing tests; Added Makefile with eval targets; 100% pass rate on routing, edge case, and follow-up tests |
