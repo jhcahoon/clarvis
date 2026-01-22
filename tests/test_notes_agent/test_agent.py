@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 
 from clarvis_agents.notes_agent import NotesAgent, create_notes_agent, NotesAgentConfig
 from clarvis_agents.core import (
@@ -12,6 +12,12 @@ from clarvis_agents.core import (
     AgentResponse,
     BaseAgent,
 )
+
+
+@pytest.fixture
+def mock_anthropic_client():
+    """Create a mock Anthropic client for testing."""
+    return MagicMock()
 
 
 class TestNotesAgent:
@@ -27,16 +33,16 @@ class TestNotesAgent:
             )
             yield config
 
-    def test_agent_initialization(self, temp_config: NotesAgentConfig):
+    def test_agent_initialization(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test agent can be created."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         assert agent is not None
         assert isinstance(agent, NotesAgent)
 
-    def test_agent_with_custom_config(self, temp_config: NotesAgentConfig):
+    def test_agent_with_custom_config(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test agent with custom configuration."""
         temp_config.max_turns = 20
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         assert agent.config.max_turns == 20
 
 
@@ -60,24 +66,24 @@ class TestNotesAgentBaseAgent:
             )
             yield config
 
-    def test_inherits_from_base_agent(self, temp_config: NotesAgentConfig):
+    def test_inherits_from_base_agent(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that NotesAgent inherits from BaseAgent."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         assert isinstance(agent, BaseAgent)
 
-    def test_name_property(self, temp_config: NotesAgentConfig):
+    def test_name_property(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that name property returns 'notes'."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         assert agent.name == "notes"
 
-    def test_description_property(self, temp_config: NotesAgentConfig):
+    def test_description_property(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that description property returns expected value."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         assert "notes" in agent.description.lower() or "list" in agent.description.lower()
 
-    def test_capabilities_property(self, temp_config: NotesAgentConfig):
+    def test_capabilities_property(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that capabilities property returns correct structure."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         capabilities = agent.capabilities
 
         assert len(capabilities) == 4
@@ -96,9 +102,9 @@ class TestNotesAgentBaseAgent:
         assert len(list_cap.examples) > 0
 
     @pytest.mark.asyncio
-    async def test_process_success(self, temp_config: NotesAgentConfig):
+    async def test_process_success(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that process method returns AgentResponse on success."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
 
         # Mock the internal async method to avoid actual API calls
         with patch.object(
@@ -116,9 +122,9 @@ class TestNotesAgentBaseAgent:
             mock_handle.assert_called_once_with("Add milk to grocery list")
 
     @pytest.mark.asyncio
-    async def test_process_error_handling(self, temp_config: NotesAgentConfig):
+    async def test_process_error_handling(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that process method handles errors gracefully."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
 
         # Mock the internal async method to raise an exception
         with patch.object(
@@ -134,14 +140,14 @@ class TestNotesAgentBaseAgent:
             assert "Error" in response.content
             assert response.error == "Something went wrong"
 
-    def test_health_check(self, temp_config: NotesAgentConfig):
+    def test_health_check(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that health_check returns True when storage accessible."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         assert agent.health_check() is True
 
-    def test_can_register_with_registry(self, temp_config: NotesAgentConfig):
+    def test_can_register_with_registry(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that NotesAgent can be registered with AgentRegistry."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         registry = AgentRegistry()
 
         registry.register(agent)
@@ -149,9 +155,9 @@ class TestNotesAgentBaseAgent:
         assert "notes" in registry.list_agents()
         assert registry.get("notes") is agent
 
-    def test_registry_capabilities_include_notes(self, temp_config: NotesAgentConfig):
+    def test_registry_capabilities_include_notes(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that registry reports Notes agent capabilities correctly."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         registry = AgentRegistry()
         registry.register(agent)
 
@@ -160,9 +166,9 @@ class TestNotesAgentBaseAgent:
         assert "notes" in all_caps
         assert len(all_caps["notes"]) == 4
 
-    def test_registry_health_check_includes_notes(self, temp_config: NotesAgentConfig):
+    def test_registry_health_check_includes_notes(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that registry health check includes Notes agent."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         registry = AgentRegistry()
         registry.register(agent)
 
@@ -185,27 +191,29 @@ class TestNotesAgentRateLimiting:
             )
             yield config
 
-    def test_rate_limiter_initialized(self, temp_config: NotesAgentConfig):
+    def test_rate_limiter_initialized(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that rate limiter is initialized."""
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
         assert agent.rate_limiter is not None
 
     @pytest.mark.asyncio
-    async def test_stream_rate_limit_exceeded(self, temp_config: NotesAgentConfig):
+    async def test_stream_rate_limit_exceeded(self, temp_config: NotesAgentConfig, mock_anthropic_client):
         """Test that stream method respects rate limiting."""
         temp_config.max_requests_per_minute = 1
-        agent = NotesAgent(temp_config)
+        agent = NotesAgent(temp_config, client=mock_anthropic_client)
+
+        # Mock the Anthropic client's create method
+        mock_response = MagicMock()
+        mock_response.stop_reason = "end_turn"
+        mock_response.content = []
 
         # First call should pass through to stream
-        with patch.object(agent, "_build_agent_options"):
-            with patch("clarvis_agents.notes_agent.agent.query") as mock_query:
-                mock_query.return_value = AsyncMock()
-                mock_query.return_value.__aiter__.return_value = iter([])
+        agent._client.messages.create.return_value = mock_response
 
-                # First call
-                results1 = []
-                async for chunk in agent.stream("first query"):
-                    results1.append(chunk)
+        # First call
+        results1 = []
+        async for chunk in agent.stream("first query"):
+            results1.append(chunk)
 
         # Second call should be rate limited
         results2 = []
@@ -218,26 +226,30 @@ class TestNotesAgentRateLimiting:
 class TestCreateNotesAgent:
     """Test suite for create_notes_agent factory function."""
 
-    def test_factory_creates_agent(self):
+    def test_factory_creates_agent(self, mock_anthropic_client):
         """Test that factory creates a NotesAgent instance."""
         with TemporaryDirectory() as tmpdir:
             config = NotesAgentConfig(
                 notes_dir=Path(tmpdir) / "notes",
                 log_dir=Path(tmpdir) / "logs",
             )
-            agent = create_notes_agent(config)
-            assert isinstance(agent, NotesAgent)
+            with patch("clarvis_agents.notes_agent.agent.Anthropic", return_value=mock_anthropic_client):
+                with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+                    agent = create_notes_agent(config)
+                    assert isinstance(agent, NotesAgent)
 
-    def test_factory_creates_with_default_config(self):
+    def test_factory_creates_with_default_config(self, mock_anthropic_client):
         """Test that factory uses default configuration."""
         with TemporaryDirectory() as tmpdir:
             config = NotesAgentConfig(
                 notes_dir=Path(tmpdir) / "notes",
                 log_dir=Path(tmpdir) / "logs",
             )
-            agent = create_notes_agent(config)
-            assert agent.config.model == "claude-3-5-haiku-20241022"
-            assert agent.config.max_turns == 10
+            with patch("clarvis_agents.notes_agent.agent.Anthropic", return_value=mock_anthropic_client):
+                with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+                    agent = create_notes_agent(config)
+                    assert agent.config.model == "claude-3-5-haiku-20241022"
+                    assert agent.config.max_turns == 10
 
 
 if __name__ == "__main__":

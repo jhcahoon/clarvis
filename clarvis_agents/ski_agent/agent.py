@@ -2,16 +2,17 @@
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import AsyncGenerator, Optional
 
-from claude_agent_sdk import ClaudeAgentOptions, query
+from anthropic import Anthropic
 
 from ..core import AgentCapability, AgentResponse, BaseAgent
 from ..core.context import ConversationContext
 from .config import CachedConditions, RateLimiter, SkiAgentConfig
 from .prompts import SYSTEM_PROMPT
-from .tools import ski_tools_server
+from .tools import fetch_ski_conditions_impl
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -21,11 +22,12 @@ logger = logging.getLogger(__name__)
 class SkiAgent(BaseAgent):
     """Ski conditions reporter agent for Mt Hood Meadows."""
 
-    def __init__(self, config: Optional[SkiAgentConfig] = None):
+    def __init__(self, config: Optional[SkiAgentConfig] = None, client: Optional[Anthropic] = None):
         """Initialize Ski Agent.
 
         Args:
             config: Configuration for the agent. If None, uses default config.
+            client: Optional Anthropic client. If None, creates one.
         """
         self.config = config or SkiAgentConfig()
         self._setup_logging()
@@ -34,6 +36,12 @@ class SkiAgent(BaseAgent):
             time_window=timedelta(minutes=1),
         )
         self._cache: Optional[CachedConditions] = None
+
+        # Validate API key exists
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if client is None and not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable is required")
+        self._client = client or Anthropic(api_key=api_key)
 
     # BaseAgent interface implementation
 
@@ -106,7 +114,7 @@ class SkiAgent(BaseAgent):
     ) -> AsyncGenerator[str, None]:
         """Stream response chunks for a query.
 
-        Yields text chunks as they arrive from the Claude SDK.
+        Pre-fetches ski conditions, then streams Claude's response.
 
         Args:
             query_text: Natural language query about ski conditions.
@@ -123,14 +131,20 @@ class SkiAgent(BaseAgent):
         logger.info(f"Streaming ski conditions query: {query_text[:100]}...")
 
         try:
-            options = self._build_agent_options()
+            # Pre-fetch ski conditions
+            conditions_data = await fetch_ski_conditions_impl()
 
-            # Build prompt that instructs agent to fetch conditions
-            prompt = self._build_conditions_prompt(query_text)
+            # Build prompt with conditions data
+            prompt = self._build_prompt_with_data(query_text, conditions_data)
 
-            async for message in query(prompt=prompt, options=options):
-                text = self._extract_text_from_message(message)
-                if text:
+            # Stream response from Anthropic
+            with self._client.messages.stream(
+                model=self.config.model,
+                max_tokens=1024,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
+            ) as stream:
+                for text in stream.text_stream:
                     yield text
 
             logger.info("Ski conditions query streaming completed")
@@ -153,62 +167,24 @@ class SkiAgent(BaseAgent):
         logger.addHandler(file_handler)
         logger.info("Ski Agent logging initialized")
 
-    def _build_agent_options(self) -> ClaudeAgentOptions:
-        """Build ClaudeAgentOptions with native tools.
-
-        Returns:
-            Configured ClaudeAgentOptions for the query
-        """
-        options = ClaudeAgentOptions(
-            system_prompt=SYSTEM_PROMPT,
-            mcp_servers={"ski_tools": ski_tools_server},
-            model=self.config.model,
-            max_turns=self.config.max_turns,
-            # Skip permission checks for native tools
-            extra_args={"dangerously-skip-permissions": None},
-        )
-
-        return options
-
-    def _build_conditions_prompt(self, user_query: str) -> str:
-        """Build prompt that instructs agent to fetch and report conditions.
+    def _build_prompt_with_data(self, user_query: str, conditions_data: str) -> str:
+        """Build prompt with pre-fetched conditions data.
 
         Args:
             user_query: The user's original query
+            conditions_data: Raw conditions data from the ski conditions page
 
         Returns:
-            Prompt string for the agent
+            Prompt string with conditions data included
         """
-        return f"""Use the fetch_ski_conditions tool to get the current conditions, then answer:
+        return f"""Here are the current ski conditions from Mt Hood Meadows:
 
+<conditions>
+{conditions_data}
+</conditions>
+
+Based on this data, please answer the following question:
 {user_query}"""
-
-    def _extract_text_from_message(self, message: object) -> str:
-        """Extract text content from a Claude SDK message.
-
-        Handles various message types returned by the SDK including
-        result objects, text objects, and content blocks.
-
-        Args:
-            message: A message object from the Claude SDK query stream.
-
-        Returns:
-            Extracted text content, or empty string if no text found.
-        """
-        if hasattr(message, "result"):
-            return str(message.result)
-        elif hasattr(message, "text"):
-            return str(message.text)
-        elif hasattr(message, "content"):
-            if isinstance(message.content, str):
-                return message.content
-            elif isinstance(message.content, list):
-                parts = []
-                for block in message.content:
-                    if hasattr(block, "text") and block.text:
-                        parts.append(block.text)
-                return "".join(parts)
-        return ""
 
     async def _get_conditions(self, query_text: str) -> str:
         """Get ski conditions for a query.
@@ -226,13 +202,24 @@ class SkiAgent(BaseAgent):
         logger.info(f"Processing ski conditions query: {query_text[:100]}...")
 
         try:
-            options = self._build_agent_options()
-            prompt = self._build_conditions_prompt(query_text)
+            # Pre-fetch ski conditions
+            conditions_data = await fetch_ski_conditions_impl()
 
-            # Stream response from Claude Agent SDK
+            # Build prompt with conditions data
+            prompt = self._build_prompt_with_data(query_text, conditions_data)
+
+            # Get response from Anthropic
+            response = self._client.messages.create(
+                model=self.config.model,
+                max_tokens=1024,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
             response_text = ""
-            async for message in query(prompt=prompt, options=options):
-                response_text += self._extract_text_from_message(message)
+            for block in response.content:
+                if hasattr(block, "text"):
+                    response_text += block.text
 
             if not response_text:
                 response_text = (
