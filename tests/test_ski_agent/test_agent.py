@@ -1,7 +1,7 @@
 """Tests for Ski Agent."""
 
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 
 from clarvis_agents.ski_agent import SkiAgent, create_ski_agent, SkiAgentConfig
 from clarvis_agents.core import (
@@ -12,19 +12,25 @@ from clarvis_agents.core import (
 )
 
 
+@pytest.fixture
+def mock_anthropic_client():
+    """Create a mock Anthropic client for testing."""
+    return MagicMock()
+
+
 class TestSkiAgent:
     """Test suite for Ski Agent."""
 
-    def test_agent_initialization(self):
+    def test_agent_initialization(self, mock_anthropic_client):
         """Test agent can be created."""
-        agent = create_ski_agent()
+        agent = SkiAgent(client=mock_anthropic_client)
         assert agent is not None
         assert isinstance(agent, SkiAgent)
 
-    def test_agent_with_custom_config(self):
+    def test_agent_with_custom_config(self, mock_anthropic_client):
         """Test agent with custom configuration."""
         config = SkiAgentConfig(max_turns=20)
-        agent = SkiAgent(config)
+        agent = SkiAgent(config, client=mock_anthropic_client)
         assert agent.config.max_turns == 20
 
 
@@ -38,24 +44,24 @@ class TestSkiAgentBaseAgent:
         yield
         AgentRegistry.reset_instance()
 
-    def test_inherits_from_base_agent(self):
+    def test_inherits_from_base_agent(self, mock_anthropic_client):
         """Test that SkiAgent inherits from BaseAgent."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
         assert isinstance(agent, BaseAgent)
 
-    def test_name_property(self):
+    def test_name_property(self, mock_anthropic_client):
         """Test that name property returns 'ski'."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
         assert agent.name == "ski"
 
-    def test_description_property(self):
+    def test_description_property(self, mock_anthropic_client):
         """Test that description property returns expected value."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
         assert agent.description == "Report ski conditions for Mt Hood Meadows"
 
-    def test_capabilities_property(self):
+    def test_capabilities_property(self, mock_anthropic_client):
         """Test that capabilities property returns correct structure."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
         capabilities = agent.capabilities
 
         assert len(capabilities) == 4
@@ -75,9 +81,9 @@ class TestSkiAgentBaseAgent:
         assert len(snow_cap.examples) > 0
 
     @pytest.mark.asyncio
-    async def test_process_success(self):
+    async def test_process_success(self, mock_anthropic_client):
         """Test that process method returns AgentResponse on success."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
 
         # Mock the internal async method to avoid actual API calls
         with patch.object(
@@ -95,9 +101,9 @@ class TestSkiAgentBaseAgent:
             mock_get.assert_called_once_with("What's the ski report?")
 
     @pytest.mark.asyncio
-    async def test_process_error_handling(self):
+    async def test_process_error_handling(self, mock_anthropic_client):
         """Test that process method handles errors gracefully."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
 
         # Mock the internal async method to raise an exception
         with patch.object(
@@ -113,14 +119,14 @@ class TestSkiAgentBaseAgent:
             assert "Error getting ski conditions" in response.content
             assert response.error == "Connection failed"
 
-    def test_health_check(self):
+    def test_health_check(self, mock_anthropic_client):
         """Test that health_check returns True."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
         assert agent.health_check() is True
 
-    def test_can_register_with_registry(self):
+    def test_can_register_with_registry(self, mock_anthropic_client):
         """Test that SkiAgent can be registered with AgentRegistry."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
         registry = AgentRegistry()
 
         registry.register(agent)
@@ -128,9 +134,9 @@ class TestSkiAgentBaseAgent:
         assert "ski" in registry.list_agents()
         assert registry.get("ski") is agent
 
-    def test_registry_capabilities_include_ski(self):
+    def test_registry_capabilities_include_ski(self, mock_anthropic_client):
         """Test that registry reports Ski agent capabilities correctly."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
         registry = AgentRegistry()
         registry.register(agent)
 
@@ -139,9 +145,9 @@ class TestSkiAgentBaseAgent:
         assert "ski" in all_caps
         assert len(all_caps["ski"]) == 4
 
-    def test_registry_health_check_includes_ski(self):
+    def test_registry_health_check_includes_ski(self, mock_anthropic_client):
         """Test that registry health check includes Ski agent."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
         registry = AgentRegistry()
         registry.register(agent)
 
@@ -154,27 +160,32 @@ class TestSkiAgentBaseAgent:
 class TestSkiAgentRateLimiting:
     """Test suite for Ski Agent rate limiting."""
 
-    def test_rate_limiter_initialized(self):
+    def test_rate_limiter_initialized(self, mock_anthropic_client):
         """Test that rate limiter is initialized."""
-        agent = SkiAgent()
+        agent = SkiAgent(client=mock_anthropic_client)
         assert agent.rate_limiter is not None
 
     @pytest.mark.asyncio
-    async def test_stream_rate_limit_exceeded(self):
+    async def test_stream_rate_limit_exceeded(self, mock_anthropic_client):
         """Test that stream method respects rate limiting."""
         config = SkiAgentConfig(max_requests_per_minute=1)
-        agent = SkiAgent(config)
+        agent = SkiAgent(config, client=mock_anthropic_client)
+
+        # Mock the Anthropic client's stream method
+        mock_stream = MagicMock()
+        mock_stream.__enter__ = lambda s: s
+        mock_stream.__exit__ = lambda s, *args: None
+        mock_stream.text_stream = iter(["test response"])
 
         # First call should pass through to stream
-        with patch.object(agent, "_build_agent_options"):
-            with patch("clarvis_agents.ski_agent.agent.query") as mock_query:
-                mock_query.return_value = AsyncMock()
-                mock_query.return_value.__aiter__.return_value = iter([])
+        with patch("clarvis_agents.ski_agent.agent.fetch_ski_conditions_impl", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = "mock conditions"
+            agent._client.messages.stream.return_value = mock_stream
 
-                # First call
-                results1 = []
-                async for chunk in agent.stream("first query"):
-                    results1.append(chunk)
+            # First call
+            results1 = []
+            async for chunk in agent.stream("first query"):
+                results1.append(chunk)
 
         # Second call should be rate limited
         results2 = []
@@ -187,30 +198,38 @@ class TestSkiAgentRateLimiting:
 class TestSkiAgentPromptBuilding:
     """Test suite for Ski Agent prompt construction."""
 
-    def test_build_conditions_prompt(self):
-        """Test that prompt includes tool reference and user query."""
-        agent = SkiAgent()
-        prompt = agent._build_conditions_prompt("What's the snow report?")
+    def test_build_prompt_with_data(self, mock_anthropic_client):
+        """Test that prompt includes conditions data and user query."""
+        agent = SkiAgent(client=mock_anthropic_client)
+        prompt = agent._build_prompt_with_data(
+            "What's the snow report?",
+            "<html>Base: 72 inches</html>"
+        )
 
-        # Prompt should reference the native tool and include the query
-        assert "fetch_ski_conditions" in prompt
+        # Prompt should include the conditions data and user query
+        assert "72 inches" in prompt
         assert "What's the snow report?" in prompt
+        assert "<conditions>" in prompt
 
 
 class TestCreateSkiAgent:
     """Test suite for create_ski_agent factory function."""
 
-    def test_factory_creates_agent(self):
+    def test_factory_creates_agent(self, mock_anthropic_client):
         """Test that factory creates a SkiAgent instance."""
-        agent = create_ski_agent()
-        assert isinstance(agent, SkiAgent)
+        with patch("clarvis_agents.ski_agent.agent.Anthropic", return_value=mock_anthropic_client):
+            with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+                agent = create_ski_agent()
+                assert isinstance(agent, SkiAgent)
 
-    def test_factory_creates_with_default_config(self):
+    def test_factory_creates_with_default_config(self, mock_anthropic_client):
         """Test that factory uses default configuration."""
-        agent = create_ski_agent()
-        assert agent.config.model == "claude-3-5-haiku-20241022"
-        assert agent.config.max_turns == 10
-        assert agent.config.meadows_url == "https://cloudserv.skihood.com/"
+        with patch("clarvis_agents.ski_agent.agent.Anthropic", return_value=mock_anthropic_client):
+            with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+                agent = create_ski_agent()
+                assert agent.config.model == "claude-3-5-haiku-20241022"
+                assert agent.config.max_turns == 10
+                assert agent.config.meadows_url == "https://cloudserv.skihood.com/"
 
 
 if __name__ == "__main__":

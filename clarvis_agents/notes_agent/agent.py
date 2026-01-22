@@ -49,7 +49,12 @@ class NotesAgent(BaseAgent):
         # Initialize storage and set it for the tools module
         self._storage = NotesStorage(notes_dir=self.config.notes_dir)
         set_storage(self._storage)
-        self._client = client or Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
+        # Validate API key exists
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if client is None and not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable is required")
+        self._client = client or Anthropic(api_key=api_key)
         self._tools = self._build_tools()
 
     # BaseAgent interface implementation

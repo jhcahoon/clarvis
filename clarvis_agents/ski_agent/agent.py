@@ -36,7 +36,12 @@ class SkiAgent(BaseAgent):
             time_window=timedelta(minutes=1),
         )
         self._cache: Optional[CachedConditions] = None
-        self._client = client or Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
+        # Validate API key exists
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if client is None and not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable is required")
+        self._client = client or Anthropic(api_key=api_key)
 
     # BaseAgent interface implementation
 
